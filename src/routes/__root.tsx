@@ -101,6 +101,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
+      { name: "twitter:title", content: "Éden Marketing CRM" },
+      { property: "og:description", content: "Plataforma interna da Éden Marketing." },
+      { name: "twitter:description", content: "Plataforma interna da Éden Marketing." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/8JNABpLnp7Mx4rKPqtRXqYncb2k2/social-images/social-1782427286660-logo-full-transparent-1024.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/8JNABpLnp7Mx4rKPqtRXqYncb2k2/social-images/social-1782427286660-logo-full-transparent-1024.webp" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
