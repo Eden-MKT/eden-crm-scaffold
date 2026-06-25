@@ -1,17 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { clientesMock, type ClienteStatus } from "@/lib/mock-clientes";
+import { clientsKeys, fetchClients } from "@/lib/clients/queries";
+import type { Client } from "@/lib/clients/types";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FadeIn } from "@/components/ui/fade-in";
+import { ClientKanban } from "@/components/clients/client-kanban";
+import { ClientDashboard } from "@/components/clients/client-dashboard";
+import { CreateClientDialog } from "@/components/clients/create-client-dialog";
+import { ClientProfileDrawer } from "@/components/clients/client-profile-drawer";
 
 export const Route = createFileRoute("/clientes")({
   head: () => ({
@@ -23,68 +21,63 @@ export const Route = createFileRoute("/clientes")({
   component: ClientesPage,
 });
 
-// Mapeia status -> variante visual do Badge.
-function statusVariant(status: ClienteStatus): "default" | "secondary" | "outline" {
-  switch (status) {
-    case "Ativo":
-      return "default";
-    case "Prospect":
-      return "secondary";
-    case "Inativo":
-      return "outline";
-  }
-}
-
 function ClientesPage() {
-  // TODO: trocar mock por dados reais quando o backend estiver disponível.
-  const clientes = clientesMock;
+  const {
+    data: clients,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({ queryKey: clientsKeys.list(), queryFn: fetchClients });
+
+  const [selected, setSelected] = useState<Client | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const openClient = (client: Client) => {
+    setSelected(client);
+    setDrawerOpen(true);
+  };
+
+  const list = clients ?? [];
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Clientes</h1>
-          <p className="text-sm text-muted-foreground">
-            {clientes.length} clientes cadastrados.
-          </p>
+          <p className="text-sm text-muted-foreground">Gestão de clientes da Éden Marketing.</p>
         </div>
-        <Button
-          onClick={() => {
-            // Placeholder — abrir modal/criar formulário no futuro.
-            console.log("Adicionar cliente");
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Adicionar cliente
-        </Button>
+        <CreateClientDialog />
       </div>
 
-      <div className="rounded-md border border-border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nome</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Telefone</TableHead>
-              <TableHead>Empresa</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {clientes.map((c) => (
-              <TableRow key={c.id}>
-                <TableCell className="font-medium">{c.nome}</TableCell>
-                <TableCell>{c.email}</TableCell>
-                <TableCell>{c.telefone}</TableCell>
-                <TableCell>{c.empresa}</TableCell>
-                <TableCell>
-                  <Badge variant={statusVariant(c.status)}>{c.status}</Badge>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      {isLoading && <p className="text-sm text-muted-foreground">Carregando clientes…</p>}
+      {isError && (
+        <p className="text-sm text-destructive">
+          Erro ao carregar clientes: {error instanceof Error ? error.message : "tente novamente."}
+        </p>
+      )}
+
+      {!isLoading && !isError && (
+        <Tabs defaultValue="kanban" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="kanban">Quadro de Clientes</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="dashboard">
+            <FadeIn>
+              <ClientDashboard clients={list} />
+            </FadeIn>
+          </TabsContent>
+
+          <TabsContent value="kanban">
+            <FadeIn>
+              <ClientKanban clients={list} onCardClick={openClient} />
+            </FadeIn>
+          </TabsContent>
+        </Tabs>
+      )}
+
+      <ClientProfileDrawer client={selected} open={drawerOpen} onOpenChange={setDrawerOpen} />
     </div>
   );
 }

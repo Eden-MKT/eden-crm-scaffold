@@ -13,6 +13,18 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { MotionConfig } from "motion/react";
+
+import { Toaster } from "@/components/ui/sonner";
+import { AuthProvider, useAuth } from "@/lib/auth";
+import { ThemeProvider } from "@/lib/theme";
+import { LoginPage } from "@/components/auth/login-page";
+import { UserMenu } from "@/components/auth/user-menu";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { FadeIn } from "@/components/ui/fade-in";
+
+// Evita "flash" de tema errado no SSR: aplica a classe antes da página pintar.
+const THEME_INIT_SCRIPT = `try{var t=localStorage.getItem('eden-theme')||'dark';if(t==='dark')document.documentElement.classList.add('dark');}catch(e){document.documentElement.classList.add('dark');}`;
 
 function NotFoundComponent() {
   return (
@@ -79,19 +91,30 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "Éden Marketing CRM" },
+      { name: "description", content: "Plataforma interna da Éden Marketing." },
+      { name: "author", content: "Éden Marketing" },
+      { property: "og:title", content: "Éden Marketing CRM" },
+      {
+        property: "og:description",
+        content: "Plataforma interna da Éden Marketing.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", type: "image/png", href: "/favicon-64x64.png" },
+      { rel: "apple-touch-icon", href: "/favicon-64x64.png" },
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      {
+        rel: "preconnect",
+        href: "https://fonts.gstatic.com",
+        crossOrigin: "anonymous",
+      },
       {
         rel: "stylesheet",
-        href: appCss,
+        href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap",
       },
     ],
   }),
@@ -105,6 +128,7 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-BR">
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <HeadContent />
       </head>
       <body>
@@ -120,22 +144,60 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Layout principal do CRM: sidebar + área de conteúdo. */}
-      <SidebarProvider>
-        <div className="flex min-h-screen w-full bg-background text-foreground">
-          <AppSidebar />
-          <div className="flex flex-1 flex-col">
-            <header className="flex h-14 items-center gap-2 border-b border-border px-4">
-              <SidebarTrigger />
-              <span className="text-sm text-muted-foreground">Éden Marketing CRM</span>
-            </header>
-            <main className="flex-1 p-6">
-              {/* Required: nested routes render here. */}
-              <Outlet />
-            </main>
-          </div>
-        </div>
-      </SidebarProvider>
+      <ThemeProvider>
+        <MotionConfig reducedMotion="user">
+          <AuthProvider>
+            <AuthGate />
+            <Toaster richColors position="top-right" />
+          </AuthProvider>
+        </MotionConfig>
+      </ThemeProvider>
     </QueryClientProvider>
+  );
+}
+
+// Controla o acesso: carrega sessão → login → shell do app.
+function AuthGate() {
+  const { loading, session } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
+        Carregando…
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <LoginPage />;
+  }
+
+  return <AppShell />;
+}
+
+function AppShell() {
+  return (
+    /* Layout principal do CRM: sidebar + área de conteúdo. */
+    <SidebarProvider>
+      <div className="app-bg flex min-h-screen w-full text-foreground">
+        <AppSidebar />
+        <div className="flex flex-1 flex-col">
+          <header className="sticky top-0 z-10 flex h-14 items-center gap-2 border-b border-border/80 bg-background/85 px-4 shadow-[var(--shadow-soft)] backdrop-blur-sm">
+            <SidebarTrigger />
+            <span className="text-sm font-medium text-muted-foreground">Éden Marketing CRM</span>
+            <div className="ml-auto flex items-center gap-1">
+              <ThemeToggle />
+              <UserMenu />
+            </div>
+          </header>
+          <main className="flex-1 p-6">
+            {/* Required: nested routes render here. */}
+            <FadeIn>
+              <Outlet />
+            </FadeIn>
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
   );
 }

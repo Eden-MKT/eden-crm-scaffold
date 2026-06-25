@@ -19,6 +19,10 @@
  */
 
 @theme inline {
+  /* Tipografia da marca */
+  --font-sans:
+    "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -59,78 +63,132 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  /* Éden Marketing — tokens de marca e status */
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-light: var(--brand-light);
+  --color-navy: var(--navy);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-error: var(--error);
+  --color-error-foreground: var(--error-foreground);
 }
 
 :root {
   --radius: 0.625rem;
-  /* Éden Marketing — dark theme with orange accent (#E07A2F) */
-  --background: oklch(0.18 0.01 60);
-  --foreground: oklch(0.97 0.01 80);
-  --card: oklch(0.22 0.012 60);
-  --card-foreground: oklch(0.97 0.01 80);
-  --popover: oklch(0.22 0.012 60);
-  --popover-foreground: oklch(0.97 0.01 80);
-  --primary: oklch(0.68 0.16 48);            /* #E07A2F */
-  --primary-foreground: oklch(0.18 0.01 60);
-  --secondary: oklch(0.28 0.012 60);
-  --secondary-foreground: oklch(0.97 0.01 80);
-  --muted: oklch(0.26 0.01 60);
-  --muted-foreground: oklch(0.72 0.02 70);
-  --accent: oklch(0.68 0.16 48);
-  --accent-foreground: oklch(0.18 0.01 60);
-  --destructive: oklch(0.6 0.22 25);
-  --destructive-foreground: oklch(0.98 0.01 80);
-  --border: oklch(0.3 0.012 60);
-  --input: oklch(0.3 0.012 60);
-  --ring: oklch(0.68 0.16 48);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.21 0.012 60);
-  --sidebar-foreground: oklch(0.95 0.01 80);
-  --sidebar-primary: oklch(0.68 0.16 48);
-  --sidebar-primary-foreground: oklch(0.18 0.01 60);
-  --sidebar-accent: oklch(0.28 0.012 60);
-  --sidebar-accent-foreground: oklch(0.97 0.01 80);
-  --sidebar-border: oklch(0.3 0.012 60);
-  --sidebar-ring: oklch(0.68 0.16 48);
+  /* Sombras em camadas — tema claro (sutis) */
+  --shadow-soft: 0 1px 2px rgba(16, 25, 40, 0.04), 0 1px 3px rgba(16, 25, 40, 0.06);
+  --shadow-card: 0 1px 2px rgba(16, 25, 40, 0.04), 0 6px 16px rgba(16, 25, 40, 0.07);
+  --shadow-card-hover: 0 2px 6px rgba(16, 25, 40, 0.08), 0 14px 32px rgba(16, 25, 40, 0.12);
+  --shadow-glow: 0 0 0 1px rgba(31, 79, 214, 0.16), 0 8px 24px rgba(31, 79, 214, 0.18);
+  /*
+   * Éden Marketing — TEMA CLARO (default :root). O tema escuro fica em .dark.
+   * Azul royal (#1F4FD6) é a cor primária nos dois temas.
+   * Cada valor oklch corresponde a um hex da paleta (comentado ao lado).
+   */
+
+  /* Cores de marca + status (compartilhadas entre os dois temas) */
+  --brand: oklch(0.4887 0.2131 264.46); /* #1F4FD6 azul royal */
+  --brand-foreground: oklch(0.9729 0.0029 264.54); /* #F5F6F8 */
+  --brand-light: oklch(0.6925 0.1677 250.43); /* #3AA0FF azul claro */
+  --navy: oklch(0.2455 0.0951 265.43); /* #0A1B4D navy profundo */
+  --success: oklch(0.6911 0.1428 159.75); /* #2FB67C ativo */
+  --success-foreground: oklch(0.2111 0.0061 236.86); /* #16191B */
+  --warning: oklch(0.7588 0.1431 79.85); /* #E0A52F aviso */
+  --warning-foreground: oklch(0.2111 0.0061 236.86); /* #16191B */
+  --error: oklch(0.6255 0.181 23.97); /* #E04F4F inativo */
+  --error-foreground: oklch(0.9729 0.0029 264.54); /* #F5F6F8 */
+
+  /* Tokens semânticos (shadcn) — valores do tema CLARO */
+  --background: oklch(0.973 0.007 268.55); /* #F4F6FB off-white frio */
+  --foreground: oklch(0.2111 0.0061 236.86); /* #16191B texto principal */
+  --card: oklch(1 0 0); /* #FFFFFF cards */
+  --card-foreground: oklch(0.2111 0.0061 236.86);
+  --popover: oklch(1 0 0); /* #FFFFFF */
+  --popover-foreground: oklch(0.2111 0.0061 236.86);
+  --primary: oklch(0.4887 0.2131 264.46); /* #1F4FD6 azul royal */
+  --primary-foreground: oklch(1 0 0); /* #FFFFFF */
+  --secondary: oklch(0.9573 0.0074 260.73); /* #EEF1F6 superfície elevada */
+  --secondary-foreground: oklch(0.2111 0.0061 236.86);
+  --muted: oklch(0.9573 0.0074 260.73); /* #EEF1F6 */
+  --muted-foreground: oklch(0.5006 0.025 259.18); /* #5B6472 texto secundário */
+  --accent: oklch(0.9552 0.02 257.47); /* #E8F1FE azul claro sutil — hover */
+  --accent-foreground: oklch(0.4887 0.2131 264.46); /* #1F4FD6 */
+  --destructive: oklch(0.6255 0.181 23.97); /* #E04F4F erro */
+  --destructive-foreground: oklch(1 0 0); /* #FFFFFF */
+  --border: oklch(0.9236 0.0092 258.34); /* #E2E6EC borda sutil */
+  --input: oklch(0.9236 0.0092 258.34); /* #E2E6EC */
+  --ring: oklch(0.4887 0.2131 264.46); /* #1F4FD6 foco de inputs */
+  --chart-1: oklch(0.4887 0.2131 264.46); /* royal */
+  --chart-2: oklch(0.6925 0.1677 250.43); /* azul claro */
+  --chart-3: oklch(0.6911 0.1428 159.75); /* sucesso */
+  --chart-4: oklch(0.7588 0.1431 79.85); /* aviso */
+  --chart-5: oklch(0.6255 0.181 23.97); /* erro */
+  --sidebar: oklch(1 0 0); /* #FFFFFF */
+  --sidebar-foreground: oklch(0.2111 0.0061 236.86);
+  --sidebar-primary: oklch(0.4887 0.2131 264.46); /* #1F4FD6 item ativo */
+  --sidebar-primary-foreground: oklch(1 0 0); /* #FFFFFF */
+  --sidebar-accent: oklch(0.9552 0.02 257.47); /* #E8F1FE hover */
+  --sidebar-accent-foreground: oklch(0.4887 0.2131 264.46);
+  --sidebar-border: oklch(0.9236 0.0092 258.34); /* #E2E6EC */
+  --sidebar-ring: oklch(0.4887 0.2131 264.46); /* #1F4FD6 */
 }
 
+/*
+ * TEMA ESCURO — aplicado quando a classe `dark` está no <html>.
+ * É o visual padrão do app (o ThemeProvider adiciona `dark` por default).
+ * brand/status são herdados de :root; aqui só sobrescrevemos as superfícies.
+ */
 .dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.208 0.042 265.755);
-  --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
+  /* Sombras em camadas — tema escuro (mais profundas) */
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.45), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-card-hover: 0 2px 6px rgba(0, 0, 0, 0.5), 0 16px 40px rgba(0, 0, 0, 0.45);
+  --shadow-glow: 0 0 0 1px rgba(58, 160, 255, 0.22), 0 8px 28px rgba(31, 79, 214, 0.38);
+  --brand: oklch(0.4887 0.2131 264.46);
+  --brand-foreground: oklch(0.9729 0.0029 264.54);
+  --brand-light: oklch(0.6925 0.1677 250.43);
+  --navy: oklch(0.2455 0.0951 265.43);
+  --success: oklch(0.6911 0.1428 159.75);
+  --success-foreground: oklch(0.2111 0.0061 236.86);
+  --warning: oklch(0.7588 0.1431 79.85);
+  --warning-foreground: oklch(0.2111 0.0061 236.86);
+  --error: oklch(0.6255 0.181 23.97);
+  --error-foreground: oklch(0.9729 0.0029 264.54);
+  --background: oklch(0.2111 0.0061 236.86);
+  --foreground: oklch(0.9729 0.0029 264.54);
+  --card: oklch(0.2537 0.0135 253.07);
+  --card-foreground: oklch(0.9729 0.0029 264.54);
+  --popover: oklch(0.2537 0.0135 253.07);
+  --popover-foreground: oklch(0.9729 0.0029 264.54);
+  --primary: oklch(0.4887 0.2131 264.46);
+  --primary-foreground: oklch(0.9729 0.0029 264.54);
+  --secondary: oklch(0.3067 0.0167 255.65);
+  --secondary-foreground: oklch(0.9729 0.0029 264.54);
+  --muted: oklch(0.3067 0.0167 255.65);
+  --muted-foreground: oklch(0.7152 0.0233 256.76);
+  --accent: oklch(0.6925 0.1677 250.43);
+  --accent-foreground: oklch(0.2111 0.0061 236.86);
+  --destructive: oklch(0.6255 0.181 23.97);
+  --destructive-foreground: oklch(0.9729 0.0029 264.54);
+  --border: oklch(0.3067 0.0167 255.65);
+  --input: oklch(0.3067 0.0167 255.65);
+  --ring: oklch(0.4887 0.2131 264.46);
+  --chart-1: oklch(0.4887 0.2131 264.46);
+  --chart-2: oklch(0.6925 0.1677 250.43);
+  --chart-3: oklch(0.6911 0.1428 159.75);
+  --chart-4: oklch(0.7588 0.1431 79.85);
+  --chart-5: oklch(0.6255 0.181 23.97);
+  --sidebar: oklch(0.2111 0.0061 236.86);
+  --sidebar-foreground: oklch(0.9729 0.0029 264.54);
+  --sidebar-primary: oklch(0.4887 0.2131 264.46);
+  --sidebar-primary-foreground: oklch(0.9729 0.0029 264.54);
+  --sidebar-accent: oklch(0.6925 0.1677 250.43);
+  --sidebar-accent-foreground: oklch(0.2111 0.0061 236.86);
+  --sidebar-border: oklch(0.3067 0.0167 255.65);
+  --sidebar-ring: oklch(0.4887 0.2131 264.46);
 }
 
 @layer base {
@@ -141,5 +199,59 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/*
+ * Utilitários "profundidade refinada" — centralizam o look moderno.
+ * Funcionam nos dois temas (usam tokens). Aplicar em cards, painéis, CTA.
+ */
+@layer components {
+  .surface-depth {
+    background-image: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--card) 100%, white 3%),
+      var(--card)
+    );
+    box-shadow: var(--shadow-card);
+    border: 1px solid var(--border);
+    transition:
+      box-shadow 0.25s ease,
+      transform 0.25s ease,
+      border-color 0.25s ease;
+  }
+  .surface-depth-hover:hover {
+    box-shadow: var(--shadow-card-hover);
+    border-color: color-mix(in oklab, var(--primary) 35%, var(--border));
+    transform: translateY(-2px);
+  }
+  .glow-primary {
+    box-shadow: var(--shadow-glow);
+  }
+  .gradient-brand {
+    background-image: linear-gradient(135deg, var(--brand) 0%, var(--brand-light) 100%);
+  }
+  /* Gradiente quase imperceptível para o fundo do shell */
+  .app-bg {
+    background-image: radial-gradient(
+      120% 120% at 50% -10%,
+      color-mix(in oklab, var(--primary) 6%, var(--background)),
+      var(--background) 60%
+    );
+  }
+}
+
+/* Acessibilidade: respeita quem prefere menos movimento. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

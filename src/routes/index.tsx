@@ -1,4 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { Repeat, UserPlus, Users, Wallet } from "lucide-react";
+
+import { clientsKeys, fetchClients } from "@/lib/clients/queries";
+import { ACTIVE_STAGES } from "@/lib/clients/stages";
+import { fetchFinanceEntries, financeKeys } from "@/lib/finance/queries";
+import { formatCurrencyBRL } from "@/lib/format";
+import { StatCard } from "@/components/ui/stat-card";
+import { Stagger, StaggerItem } from "@/components/ui/fade-in";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -10,40 +19,79 @@ export const Route = createFileRoute("/")({
   component: DashboardPage,
 });
 
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-
-// Dashboard placeholder com cards vazios.
-const cards = [
-  { title: "Clientes ativos" },
-  { title: "Novos este mês" },
-  { title: "Campanhas em andamento" },
-  { title: "Receita estimada" },
-];
-
 function DashboardPage() {
+  const { data: clients } = useQuery({
+    queryKey: clientsKeys.list(),
+    queryFn: fetchClients,
+  });
+  const { data: entries } = useQuery({
+    queryKey: financeKeys.list(),
+    queryFn: fetchFinanceEntries,
+  });
+
+  const list = clients ?? [];
+  const fin = entries ?? [];
+  const now = new Date();
+
+  const ativos = list.filter((c) => ACTIVE_STAGES.includes(c.stage)).length;
+  const novosMes = list.filter((c) => {
+    const d = new Date(c.createdAt);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  }).length;
+  const contratado = fin.filter((e) => e.kind === "income").reduce((s, e) => s + e.amount, 0);
+  const mrr = fin
+    .filter((e) => e.kind === "income" && e.isRecurring)
+    .reduce((s, e) => s + e.amount, 0);
+
+  const cards = [
+    {
+      title: "Clientes ativos",
+      value: ativos,
+      accent: "#2FB67C",
+      icon: <Users className="h-4 w-4" />,
+    },
+    {
+      title: "Novos este mês",
+      value: novosMes,
+      accent: "#3AA0FF",
+      icon: <UserPlus className="h-4 w-4" />,
+    },
+    {
+      title: "Valor em contratos",
+      value: contratado,
+      format: formatCurrencyBRL,
+      accent: "#1F4FD6",
+      icon: <Wallet className="h-4 w-4" />,
+    },
+    {
+      title: "Recorrente / mês",
+      value: mrr,
+      format: formatCurrencyBRL,
+      accent: "#E0A52F",
+      icon: <Repeat className="h-4 w-4" />,
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          Visão geral da operação da Éden Marketing.
-        </p>
+        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+        <p className="text-sm text-muted-foreground">Visão geral da operação da Éden Marketing.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <Stagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((c) => (
-          <Card key={c.title}>
-            <CardHeader>
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {c.title}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-semibold text-primary">—</div>
-            </CardContent>
-          </Card>
+          <StaggerItem key={c.title}>
+            <StatCard
+              title={c.title}
+              value={c.value}
+              format={c.format}
+              accent={c.accent}
+              icon={c.icon}
+            />
+          </StaggerItem>
         ))}
-      </div>
+      </Stagger>
     </div>
   );
 }

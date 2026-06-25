@@ -16,6 +16,14 @@ dist-ssr
 .nitro
 *.local
 
+# Env / secrets (NUNCA commitar — o branch sincroniza com o Lovable)
+.env
+.env.*
+!.env.example
+
+# Documentos confidenciais de clientes (PII/contratos) — só no Supabase Storage
+/clientes/
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
