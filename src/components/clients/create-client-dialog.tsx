@@ -38,10 +38,16 @@ const schema = z.object({
   email: z.string().email("Email inválido").optional().or(z.literal("")),
   phone: z.string().optional(),
   stage: z.enum([
-    "onboarding",
-    "estrategia",
-    "aguardando_dados",
-    "executando_estrategia",
+    "kickoff",
+    "site_infra",
+    "tracking_dados",
+    "crm_integracoes",
+    "pesquisa_planejamento",
+    "criativos",
+    "estrutura_campanha",
+    "gestao_continua",
+    "relatorios_bi",
+    "otimizacao_escala",
     "manutencao",
     "churn",
   ]),
@@ -70,7 +76,7 @@ export function CreateClientDialog() {
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { stage: "onboarding", contractValue: 0, billingType: "avista" },
+    defaultValues: { stage: "kickoff", contractValue: 0, billingType: "avista" },
   });
 
   const mutation = useMutation({
@@ -120,7 +126,7 @@ export function CreateClientDialog() {
   const handleClose = (next: boolean) => {
     setOpen(next);
     if (!next) {
-      reset({ stage: "onboarding", contractValue: 0, billingType: "avista" });
+      reset({ stage: "kickoff", contractValue: 0, billingType: "avista" });
       setContractFile(null);
       setAdditionalFiles([]);
     }

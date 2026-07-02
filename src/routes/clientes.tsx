@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { clientsKeys, fetchClients } from "@/lib/clients/queries";
 import type { Client } from "@/lib/clients/types";
@@ -11,7 +11,18 @@ import { ClientDashboard } from "@/components/clients/client-dashboard";
 import { CreateClientDialog } from "@/components/clients/create-client-dialog";
 import { ClientProfileDrawer } from "@/components/clients/client-profile-drawer";
 
+type ClientesTab = "dashboard" | "kanban";
+
+interface ClientesSearch {
+  client?: string;
+  tab?: ClientesTab;
+}
+
 export const Route = createFileRoute("/clientes")({
+  validateSearch: (search: Record<string, unknown>): ClientesSearch => ({
+    client: typeof search.client === "string" ? search.client : undefined,
+    tab: search.tab === "kanban" || search.tab === "dashboard" ? search.tab : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Clientes — Éden Marketing CRM" },
@@ -22,6 +33,9 @@ export const Route = createFileRoute("/clientes")({
 });
 
 function ClientesPage() {
+  const { client: clientIdFromUrl, tab: tabFromUrl } = Route.useSearch();
+  const navigate = Route.useNavigate();
+
   const {
     data: clients,
     isLoading,
@@ -31,6 +45,7 @@ function ClientesPage() {
 
   const [selected, setSelected] = useState<Client | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<ClientesTab>(tabFromUrl ?? "kanban");
 
   const openClient = (client: Client) => {
     setSelected(client);
@@ -38,6 +53,16 @@ function ClientesPage() {
   };
 
   const list = clients ?? [];
+
+  // Deep link: /clientes?client=ID&tab=kanban
+  useEffect(() => {
+    if (!clientIdFromUrl || list.length === 0) return;
+    const client = list.find((c) => c.id === clientIdFromUrl);
+    if (!client) return;
+    if (tabFromUrl) setActiveTab(tabFromUrl);
+    openClient(client);
+    navigate({ search: {}, replace: true });
+  }, [clientIdFromUrl, tabFromUrl, list, navigate]);
 
   return (
     <div className="space-y-6">
@@ -57,7 +82,11 @@ function ClientesPage() {
       )}
 
       {!isLoading && !isError && (
-        <Tabs defaultValue="kanban" className="space-y-6">
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v as ClientesTab)}
+          className="space-y-6"
+        >
           <TabsList>
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="kanban">Quadro de Clientes</TabsTrigger>

@@ -13,7 +13,8 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { STAGES, isStage, type Stage } from "@/lib/clients/stages";
+import { STAGES, ASSIGNEE_COLORS, isStage, type Stage } from "@/lib/clients/stages";
+import { TEAM_MEMBER_LABELS } from "@/lib/team";
 import { clientsKeys, updateClientStage } from "@/lib/clients/queries";
 import type { Client } from "@/lib/clients/types";
 
@@ -83,6 +84,18 @@ export function ClientKanban({ clients, onCardClick }: ClientKanbanProps) {
       onDragEnd={handleDragEnd}
       onDragCancel={() => setActiveClient(null)}
     >
+      <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">Responsável:</span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: ASSIGNEE_COLORS.filipe }} />
+          {TEAM_MEMBER_LABELS.filipe}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: ASSIGNEE_COLORS.joao }} />
+          {TEAM_MEMBER_LABELS.joao}
+        </span>
+      </div>
+
       <div className="flex gap-4 overflow-x-auto pb-4">
         {STAGES.map((stage) => (
           <KanbanColumn

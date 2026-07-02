@@ -2,12 +2,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Repeat, UserPlus, Users, Wallet } from "lucide-react";
 
+import { PendingTasksSection } from "@/components/dashboard/pending-tasks-section";
+import { Stagger, StaggerItem } from "@/components/ui/fade-in";
+import { StatCard } from "@/components/ui/stat-card";
 import { clientsKeys, fetchClients } from "@/lib/clients/queries";
+import { fetchAllTaskCompletions, taskKeys } from "@/lib/clients/task-queries";
 import { ACTIVE_STAGES } from "@/lib/clients/stages";
 import { fetchFinanceEntries, financeKeys } from "@/lib/finance/queries";
 import { formatCurrencyBRL } from "@/lib/format";
-import { StatCard } from "@/components/ui/stat-card";
-import { Stagger, StaggerItem } from "@/components/ui/fade-in";
+import { useTeamMember } from "@/lib/team";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -20,6 +23,7 @@ export const Route = createFileRoute("/")({
 });
 
 function DashboardPage() {
+  const member = useTeamMember();
   const { data: clients } = useQuery({
     queryKey: clientsKeys.list(),
     queryFn: fetchClients,
@@ -27,6 +31,10 @@ function DashboardPage() {
   const { data: entries } = useQuery({
     queryKey: financeKeys.list(),
     queryFn: fetchFinanceEntries,
+  });
+  const { data: completions } = useQuery({
+    queryKey: taskKeys.all,
+    queryFn: fetchAllTaskCompletions,
   });
 
   const list = clients ?? [];
@@ -78,6 +86,12 @@ function DashboardPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground">Visão geral da operação da Éden Marketing.</p>
       </div>
+
+      <PendingTasksSection
+        clients={list}
+        completions={completions ?? []}
+        member={member}
+      />
 
       <Stagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((c) => (

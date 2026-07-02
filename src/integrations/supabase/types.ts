@@ -112,6 +112,71 @@ export interface Database {
           },
         ];
       };
+      client_task_completions: {
+        Row: {
+          id: string;
+          client_id: string;
+          task_key: string;
+          completed_at: string;
+          completed_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          task_key: string;
+          completed_at?: string;
+          completed_by?: string | null;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          task_key?: string;
+          completed_at?: string;
+          completed_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "client_task_completions_client_id_fkey";
+            columns: ["client_id"];
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      client_credentials: {
+        Row: {
+          client_id: string;
+          instagram_login: string | null;
+          instagram_password: string | null;
+          notes: string | null;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          client_id: string;
+          instagram_login?: string | null;
+          instagram_password?: string | null;
+          notes?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          client_id?: string;
+          instagram_login?: string | null;
+          instagram_password?: string | null;
+          notes?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "client_credentials_client_id_fkey";
+            columns: ["client_id"];
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       client_files: {
         Row: {
           id: string;

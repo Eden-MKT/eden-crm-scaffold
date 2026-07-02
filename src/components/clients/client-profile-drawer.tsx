@@ -1,4 +1,5 @@
-import { Building2, Mail, Phone } from "lucide-react";
+import { Building2, KeyRound, Mail, Phone } from "lucide-react";
+import { useState } from "react";
 
 import { STAGE_MAP } from "@/lib/clients/stages";
 import { paymentMethodLabel } from "@/lib/clients/payment-methods";
@@ -13,9 +14,13 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 import { ExpenseManager } from "@/components/finance/expense-manager";
 
+import { ClientCredentialsDialog } from "./client-credentials-dialog";
+
 import { ClientFilesSection } from "./client-files-section";
+import { ClientOnboardingChecklist } from "./client-onboarding-checklist";
 import { StageBadge } from "./stage-badge";
 
 interface ClientProfileDrawerProps {
@@ -25,6 +30,8 @@ interface ClientProfileDrawerProps {
 }
 
 export function ClientProfileDrawer({ client, open, onOpenChange }: ClientProfileDrawerProps) {
+  const [credentialsOpen, setCredentialsOpen] = useState(false);
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-md">
@@ -45,6 +52,23 @@ export function ClientProfileDrawer({ client, open, onOpenChange }: ClientProfil
                 {client.phone && <InfoRow icon={Phone} value={client.phone} />}
               </section>
 
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full gap-2"
+                onClick={() => setCredentialsOpen(true)}
+              >
+                <KeyRound className="h-4 w-4" />
+                Credenciais
+              </Button>
+
+              <ClientCredentialsDialog
+                clientId={client.id}
+                clientName={client.name}
+                open={credentialsOpen}
+                onOpenChange={setCredentialsOpen}
+              />
+
               <Separator />
 
               <section className="grid grid-cols-2 gap-4 text-sm">
@@ -58,6 +82,10 @@ export function ClientProfileDrawer({ client, open, onOpenChange }: ClientProfil
                 <Stat label="Cadastrado em" value={formatDate(client.createdAt)} />
                 <Stat label="Atualizado em" value={formatDate(client.updatedAt)} />
               </section>
+
+              <Separator />
+
+              <ClientOnboardingChecklist clientId={client.id} stage={client.stage} />
 
               <Separator />
 

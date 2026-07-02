@@ -43,7 +43,7 @@ export function ClientDashboard({ clients }: ClientDashboardProps) {
 
   const summary = [
     { title: "Clientes ativos", value: totalAtivos, accent: "#2FB67C" },
-    { title: "Em onboarding", value: countByStage("onboarding"), accent: "#3AA0FF" },
+    { title: "Em kickoff", value: countByStage("kickoff"), accent: "#2FB67C" },
     { title: "Em manutenção", value: countByStage("manutencao"), accent: "#2FB67C" },
     { title: "Churn", value: countByStage("churn"), accent: "#E04F4F" },
     {

@@ -1,13 +1,15 @@
 import { STAGE_MAP, type Stage } from "@/lib/clients/stages";
+import { TEAM_MEMBER_LABELS } from "@/lib/team";
 import { cn } from "@/lib/utils";
 
 interface StageBadgeProps {
   stage: Stage;
   className?: string;
+  showAssignee?: boolean;
 }
 
-// Indicador da etapa com a cor da etapa (ponto + label).
-export function StageBadge({ stage, className }: StageBadgeProps) {
+// Indicador da etapa com a cor do responsável (ponto + label).
+export function StageBadge({ stage, className, showAssignee = true }: StageBadgeProps) {
   const config = STAGE_MAP[stage];
   if (!config) return null;
 
@@ -20,6 +22,9 @@ export function StageBadge({ stage, className }: StageBadgeProps) {
     >
       <span className="h-2 w-2 rounded-full" style={{ backgroundColor: config.color }} />
       {config.short}
+      {showAssignee && config.assignee && (
+        <span className="text-muted-foreground">· {TEAM_MEMBER_LABELS[config.assignee]}</span>
+      )}
     </span>
   );
 }

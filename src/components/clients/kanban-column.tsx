@@ -1,6 +1,7 @@
 import { useDroppable } from "@dnd-kit/core";
 
 import type { StageConfig } from "@/lib/clients/stages";
+import { TEAM_MEMBER_LABELS } from "@/lib/team";
 import { formatCurrencyBRL } from "@/lib/format";
 import type { Client } from "@/lib/clients/types";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,11 @@ export function KanbanColumn({ stage, clients, onCardClick }: KanbanColumnProps)
           {clients.length}
         </span>
       </div>
+      {stage.assignee && (
+        <p className="mb-2 px-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          {TEAM_MEMBER_LABELS[stage.assignee]}
+        </p>
+      )}
 
       <div
         ref={setNodeRef}

@@ -1,7 +1,7 @@
 import { Building2, GripVertical } from "lucide-react";
 
 import { formatCurrencyBRL } from "@/lib/format";
-import { STAGE_MAP } from "@/lib/clients/stages";
+import { stageAssigneeColor } from "@/lib/clients/stages";
 import type { Client } from "@/lib/clients/types";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +16,7 @@ interface ClientCardProps {
 
 // Card visual do cliente (sem lógica de drag — reaproveitado no overlay).
 export function ClientCard({ client, onClick, overlay, dragging, className }: ClientCardProps) {
-  const stage = STAGE_MAP[client.stage];
+  const color = stageAssigneeColor(client.stage);
 
   return (
     <div
@@ -27,7 +27,10 @@ export function ClientCard({ client, onClick, overlay, dragging, className }: Cl
         dragging && "opacity-40",
         className,
       )}
-      style={{ borderLeft: `3px solid ${stage?.color ?? "transparent"}` }}
+      style={{
+        borderLeft: `3px solid ${color}`,
+        backgroundColor: `${color}12`,
+      }}
     >
       <GripVertical className="absolute right-2 top-2 h-4 w-4 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100" />
       <p className="pr-5 font-medium leading-tight text-foreground">{client.name}</p>
