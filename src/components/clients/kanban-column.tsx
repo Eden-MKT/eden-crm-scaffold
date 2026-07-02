@@ -11,15 +11,21 @@ import { DraggableClientCard } from "./draggable-client-card";
 interface KanbanColumnProps {
   stage: StageConfig;
   clients: Client[];
+  completionsByClient: Map<string, Set<string>>;
   onCardClick: (client: Client) => void;
 }
 
-export function KanbanColumn({ stage, clients, onCardClick }: KanbanColumnProps) {
+export function KanbanColumn({
+  stage,
+  clients,
+  completionsByClient,
+  onCardClick,
+}: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const total = clients.reduce((sum, c) => sum + c.contractValue, 0);
 
   return (
-    <div className="flex w-72 shrink-0 flex-col">
+    <div className="flex w-80 shrink-0 flex-col">
       <div className="mb-3 flex items-center gap-2">
         <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: stage.color }} />
         <h3 className="text-sm font-semibold text-foreground">{stage.label}</h3>
@@ -36,7 +42,7 @@ export function KanbanColumn({ stage, clients, onCardClick }: KanbanColumnProps)
       <div
         ref={setNodeRef}
         className={cn(
-          "flex min-h-32 flex-1 flex-col gap-2 rounded-lg border border-dashed border-transparent p-2 transition-colors",
+          "flex min-h-32 flex-1 flex-col gap-3 rounded-lg border border-dashed border-transparent p-2 transition-colors",
           isOver && "border-primary/60 bg-primary/5",
         )}
       >
@@ -44,6 +50,7 @@ export function KanbanColumn({ stage, clients, onCardClick }: KanbanColumnProps)
           <DraggableClientCard
             key={client.id}
             client={client}
+            completedKeys={completionsByClient.get(client.id)}
             onClick={() => onCardClick(client)}
           />
         ))}

@@ -10,10 +10,12 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { STAGES, ASSIGNEE_COLORS, isStage, type Stage } from "@/lib/clients/stages";
+import { fetchAllTaskCompletions, taskKeys } from "@/lib/clients/task-queries";
+import { buildCompletionsMap } from "@/lib/clients/task-utils";
 import { TEAM_MEMBER_LABELS } from "@/lib/team";
 import { clientsKeys, updateClientStage } from "@/lib/clients/queries";
 import type { Client } from "@/lib/clients/types";
@@ -29,6 +31,12 @@ interface ClientKanbanProps {
 export function ClientKanban({ clients, onCardClick }: ClientKanbanProps) {
   const queryClient = useQueryClient();
   const [activeClient, setActiveClient] = useState<Client | null>(null);
+
+  const { data: allCompletions = [] } = useQuery({
+    queryKey: taskKeys.all,
+    queryFn: fetchAllTaskCompletions,
+  });
+  const completionsByClient = buildCompletionsMap(allCompletions);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -102,6 +110,7 @@ export function ClientKanban({ clients, onCardClick }: ClientKanbanProps) {
             key={stage.id}
             stage={stage}
             clients={byStage(stage.id)}
+            completionsByClient={completionsByClient}
             onCardClick={onCardClick}
           />
         ))}
