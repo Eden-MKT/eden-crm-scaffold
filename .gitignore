@@ -16,10 +16,7 @@ dist-ssr
 .nitro
 *.local
 
-# Env / secrets (NUNCA commitar — o branch sincroniza com o Lovable)
-.env
-.env.*
-!.env.example
+# Env: .env é versionado para que VITE_SUPABASE_* cheguem ao deploy
 
 # Documentos confidenciais de clientes (PII/contratos) — só no Supabase Storage
 /clientes/
