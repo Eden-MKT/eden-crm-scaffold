@@ -20,6 +20,7 @@ interface PendingTasksSectionProps {
   clients: Client[];
   completions: TaskCompletion[];
   member: TeamMember;
+  loggedInEmail?: string | null;
 }
 
 function WarningBanner({
@@ -60,7 +61,12 @@ function WarningBanner({
   );
 }
 
-export function PendingTasksSection({ clients, completions, member }: PendingTasksSectionProps) {
+export function PendingTasksSection({
+  clients,
+  completions,
+  member,
+  loggedInEmail,
+}: PendingTasksSectionProps) {
   if (!isTeamConfigured()) {
     return (
       <FadeIn>
@@ -92,7 +98,12 @@ export function PendingTasksSection({ clients, completions, member }: PendingTas
             icon={UserX}
             title="E-mail não reconhecido"
             description="Seu e-mail de login não está vinculado a Filipe ou João. Entre com a conta correta da equipe."
-            hint={`Contas válidas: ${TEAM_EMAILS.filipe} (Filipe) ou ${TEAM_EMAILS.joao} (João).`}
+            hint={[
+              loggedInEmail ? `Você entrou como: ${loggedInEmail}` : null,
+              `Contas válidas: ${TEAM_EMAILS.filipe} (Filipe) ou ${TEAM_EMAILS.joao} (João).`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           />
         </section>
       </FadeIn>

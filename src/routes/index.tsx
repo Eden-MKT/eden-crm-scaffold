@@ -10,6 +10,7 @@ import { fetchAllTaskCompletions, taskKeys } from "@/lib/clients/task-queries";
 import { ACTIVE_STAGES } from "@/lib/clients/stages";
 import { fetchFinanceEntries, financeKeys } from "@/lib/finance/queries";
 import { formatCurrencyBRL } from "@/lib/format";
+import { useAuth } from "@/lib/auth";
 import { useTeamMember } from "@/lib/team";
 
 export const Route = createFileRoute("/")({
@@ -23,6 +24,7 @@ export const Route = createFileRoute("/")({
 });
 
 function DashboardPage() {
+  const { user } = useAuth();
   const member = useTeamMember();
   const { data: clients } = useQuery({
     queryKey: clientsKeys.list(),
@@ -91,6 +93,7 @@ function DashboardPage() {
         clients={list}
         completions={completions ?? []}
         member={member}
+        loggedInEmail={user?.email}
       />
 
       <Stagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
