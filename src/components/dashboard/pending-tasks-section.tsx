@@ -11,7 +11,7 @@ import { getPendingClientsForMember } from "@/lib/clients/pending";
 import { ASSIGNEE_COLORS } from "@/lib/clients/stages";
 import type { Client } from "@/lib/clients/types";
 import type { TaskCompletion } from "@/lib/clients/task-queries";
-import { isTeamConfigured, TEAM_MEMBER_LABELS, type TeamMember } from "@/lib/team";
+import { isTeamConfigured, TEAM_EMAILS, TEAM_MEMBER_LABELS, type TeamMember } from "@/lib/team";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FadeIn } from "@/components/ui/fade-in";
@@ -72,8 +72,8 @@ export function PendingTasksSection({ clients, completions, member }: PendingTas
           <WarningBanner
             icon={Settings}
             title="Equipe não configurada"
-            description="As variáveis de ambiente dos e-mails da equipe ainda não foram definidas. Sem isso, o dashboard não consegue mostrar suas pendências personalizadas."
-            hint="Adicione VITE_TEAM_FILIPE_EMAIL e VITE_TEAM_JOAO_EMAIL no arquivo .env e reinicie o servidor."
+            description="O sistema ainda não consegue identificar quem é Filipe e quem é João. Sem isso, suas pendências personalizadas não aparecem aqui."
+            hint="Peça ao administrador do projeto para configurar os e-mails da equipe no deploy."
           />
         </section>
       </FadeIn>
@@ -91,8 +91,8 @@ export function PendingTasksSection({ clients, completions, member }: PendingTas
           <WarningBanner
             icon={UserX}
             title="E-mail não reconhecido"
-            description="Seu e-mail de login não está mapeado para Filipe ou João. Entre com a conta correta ou peça para atualizar o mapeamento no .env."
-            hint="Contas válidas: filipesenna59@gmail.com (Filipe) ou joaopaulorodrigues97@hotmail.com (João)."
+            description="Seu e-mail de login não está vinculado a Filipe ou João. Entre com a conta correta da equipe."
+            hint={`Contas válidas: ${TEAM_EMAILS.filipe} (Filipe) ou ${TEAM_EMAILS.joao} (João).`}
           />
         </section>
       </FadeIn>
