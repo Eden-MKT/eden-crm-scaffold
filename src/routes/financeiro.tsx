@@ -30,7 +30,7 @@ function FinanceiroPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Financeiro</h1>
+        <h1 className="text-xl font-semibold md:text-2xl">Financeiro</h1>
         <p className="text-sm text-muted-foreground">
           Receitas dos contratos, contas a receber e despesas da empresa.
         </p>
@@ -45,9 +45,13 @@ function FinanceiroPage() {
 
       {!isLoading && !isError && (
         <Tabs defaultValue="dashboard" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-            <TabsTrigger value="despesas">Despesas da empresa</TabsTrigger>
+          <TabsList className="w-full justify-start overflow-x-auto">
+            <TabsTrigger value="dashboard" className="shrink-0">
+              Dashboard
+            </TabsTrigger>
+            <TabsTrigger value="despesas" className="shrink-0">
+              Despesas da empresa
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard">

@@ -220,6 +220,248 @@ export interface Database {
           },
         ];
       };
+      whatsapp_agents: {
+        Row: {
+          id: string;
+          client_id: string;
+          instance_name: string | null;
+          status: string;
+          phone_number: string | null;
+          system_prompt: string | null;
+          niche: string | null;
+          business_info: string | null;
+          conversion_goal: string | null;
+          model: string;
+          temperature: number;
+          ai_enabled: boolean;
+          greeting: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          instance_name?: string | null;
+          status?: string;
+          phone_number?: string | null;
+          system_prompt?: string | null;
+          niche?: string | null;
+          business_info?: string | null;
+          conversion_goal?: string | null;
+          model?: string;
+          temperature?: number;
+          ai_enabled?: boolean;
+          greeting?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          instance_name?: string | null;
+          status?: string;
+          phone_number?: string | null;
+          system_prompt?: string | null;
+          niche?: string | null;
+          business_info?: string | null;
+          conversion_goal?: string | null;
+          model?: string;
+          temperature?: number;
+          ai_enabled?: boolean;
+          greeting?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_agents_client_id_fkey";
+            columns: ["client_id"];
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      whatsapp_conversations: {
+        Row: {
+          id: string;
+          agent_id: string;
+          remote_jid: string;
+          contact_name: string | null;
+          profile_pic_url: string | null;
+          last_message_at: string | null;
+          last_message_preview: string | null;
+          ai_paused: boolean;
+          converted: boolean;
+          converted_at: string | null;
+          unread_count: number;
+          last_inbound_message_id: string | null;
+          ai_claimed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          agent_id: string;
+          remote_jid: string;
+          contact_name?: string | null;
+          profile_pic_url?: string | null;
+          last_message_at?: string | null;
+          last_message_preview?: string | null;
+          ai_paused?: boolean;
+          converted?: boolean;
+          converted_at?: string | null;
+          unread_count?: number;
+          last_inbound_message_id?: string | null;
+          ai_claimed_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          agent_id?: string;
+          remote_jid?: string;
+          contact_name?: string | null;
+          profile_pic_url?: string | null;
+          last_message_at?: string | null;
+          last_message_preview?: string | null;
+          ai_paused?: boolean;
+          converted?: boolean;
+          converted_at?: string | null;
+          unread_count?: number;
+          last_inbound_message_id?: string | null;
+          ai_claimed_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_conversations_agent_id_fkey";
+            columns: ["agent_id"];
+            referencedRelation: "whatsapp_agents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      whatsapp_messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          direction: string;
+          sender: string;
+          message_type: string;
+          content: string | null;
+          media_path: string | null;
+          media_mime: string | null;
+          evolution_id: string | null;
+          sent_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          direction: string;
+          sender: string;
+          message_type?: string;
+          content?: string | null;
+          media_path?: string | null;
+          media_mime?: string | null;
+          evolution_id?: string | null;
+          sent_at?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          direction?: string;
+          sender?: string;
+          message_type?: string;
+          content?: string | null;
+          media_path?: string | null;
+          media_mime?: string | null;
+          evolution_id?: string | null;
+          sent_at?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_messages_conversation_id_fkey";
+            columns: ["conversation_id"];
+            referencedRelation: "whatsapp_conversations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      whatsapp_usage: {
+        Row: {
+          id: string;
+          agent_id: string;
+          conversation_id: string | null;
+          kind: string;
+          model: string;
+          prompt_tokens: number;
+          completion_tokens: number;
+          cost_usd: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          agent_id: string;
+          conversation_id?: string | null;
+          kind: string;
+          model: string;
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          cost_usd?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          agent_id?: string;
+          conversation_id?: string | null;
+          kind?: string;
+          model?: string;
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          cost_usd?: number;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_usage_agent_id_fkey";
+            columns: ["agent_id"];
+            referencedRelation: "whatsapp_agents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      whatsapp_connect_tokens: {
+        Row: {
+          token: string;
+          agent_id: string;
+          expires_at: string;
+          used_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          token?: string;
+          agent_id: string;
+          expires_at: string;
+          used_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          token?: string;
+          agent_id?: string;
+          expires_at?: string;
+          used_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_connect_tokens_agent_id_fkey";
+            columns: ["agent_id"];
+            referencedRelation: "whatsapp_agents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

@@ -76,7 +76,7 @@ export function FinanceDashboard({ entries }: FinanceDashboardProps) {
 
   return (
     <div className="space-y-6">
-      <Stagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <Stagger className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
         {summary.map((s) => (
           <StaggerItem key={s.title}>
             <StatCard
@@ -183,13 +183,13 @@ export function FinanceDashboard({ entries }: FinanceDashboardProps) {
           {upcoming.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nenhuma conta pendente com vencimento.</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="space-y-2 overflow-x-auto">
               {upcoming.map((e) => {
                 const overdue = (e.dueDate ?? "") < today;
                 return (
                   <li
                     key={e.id}
-                    className="flex items-center gap-3 rounded-md border border-border p-2 transition-colors hover:bg-accent/40"
+                    className="flex min-w-0 flex-wrap items-center gap-2 rounded-md border border-border p-2 transition-colors hover:bg-accent/40 sm:flex-nowrap sm:gap-3"
                   >
                     <Badge variant={e.kind === "income" ? "success" : "warning"}>
                       {e.kind === "income" ? "Receber" : "Pagar"}

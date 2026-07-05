@@ -85,7 +85,7 @@ function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+        <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Dashboard</h1>
         <p className="text-sm text-muted-foreground">Visão geral da operação da Éden Marketing.</p>
       </div>
 
@@ -96,7 +96,7 @@ function DashboardPage() {
         loggedInEmail={user?.email}
       />
 
-      <Stagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <Stagger className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {cards.map((c) => (
           <StaggerItem key={c.title}>
             <StatCard

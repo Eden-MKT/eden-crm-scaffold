@@ -25,7 +25,7 @@ export function KanbanColumn({
   const total = clients.reduce((sum, c) => sum + c.contractValue, 0);
 
   return (
-    <div className="flex w-80 shrink-0 flex-col">
+    <div className="flex w-[88vw] max-w-[320px] shrink-0 snap-center flex-col md:w-80 md:max-w-none">
       <div className="mb-3 flex items-center gap-2">
         <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: stage.color }} />
         <h3 className="text-sm font-semibold text-foreground">{stage.label}</h3>

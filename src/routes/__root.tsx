@@ -4,6 +4,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -13,11 +14,11 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { AppToaster } from "@/components/layout/app-toaster";
+import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { MotionConfig } from "motion/react";
-
-import { Toaster } from "@/components/ui/sonner";
-import { AuthProvider, useAuth } from "@/lib/auth";
 import { ThemeProvider } from "@/lib/theme";
+import { AuthProvider, useAuth } from "@/lib/auth";
 import { LoginPage } from "@/components/auth/login-page";
 import { UserMenu } from "@/components/auth/user-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -90,7 +91,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: "Éden Marketing CRM" },
       { name: "description", content: "Plataforma interna da Éden Marketing." },
       { name: "author", content: "Éden Marketing" },
@@ -104,8 +105,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:title", content: "Éden Marketing CRM" },
       { property: "og:description", content: "Plataforma interna da Éden Marketing." },
       { name: "twitter:description", content: "Plataforma interna da Éden Marketing." },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/8JNABpLnp7Mx4rKPqtRXqYncb2k2/social-images/social-1782427286660-logo-full-transparent-1024.webp" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/8JNABpLnp7Mx4rKPqtRXqYncb2k2/social-images/social-1782427286660-logo-full-transparent-1024.webp" },
+      {
+        property: "og:image",
+        content:
+          "https://storage.googleapis.com/gpt-engineer-file-uploads/8JNABpLnp7Mx4rKPqtRXqYncb2k2/social-images/social-1782427286660-logo-full-transparent-1024.webp",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://storage.googleapis.com/gpt-engineer-file-uploads/8JNABpLnp7Mx4rKPqtRXqYncb2k2/social-images/social-1782427286660-logo-full-transparent-1024.webp",
+      },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -153,7 +162,7 @@ function RootComponent() {
         <MotionConfig reducedMotion="user">
           <AuthProvider>
             <AuthGate />
-            <Toaster richColors position="top-right" />
+            <AppToaster />
           </AuthProvider>
         </MotionConfig>
       </ThemeProvider>
@@ -163,7 +172,14 @@ function RootComponent() {
 
 // Controla o acesso: carrega sessão → login → shell do app.
 function AuthGate() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { loading, session } = useAuth();
+
+  // Rotas públicas (ex.: página de QR do cliente) renderizam fora do AppShell,
+  // sem exigir sessão. Checado antes de loading/login (SSR-safe via router).
+  if (pathname.startsWith("/conectar")) {
+    return <Outlet />;
+  }
 
   if (loading) {
     return (
@@ -187,21 +203,33 @@ function AppShell() {
       <div className="app-bg flex min-h-screen w-full text-foreground">
         <AppSidebar />
         <div className="flex flex-1 flex-col">
-          <header className="sticky top-0 z-10 flex h-14 items-center gap-2 border-b border-border/80 bg-background/85 px-4 shadow-[var(--shadow-soft)] backdrop-blur-sm">
-            <SidebarTrigger />
-            <span className="text-sm font-medium text-muted-foreground">Éden Marketing CRM</span>
+          <header className="sticky top-0 z-10 flex h-12 items-center gap-2 border-b border-border/80 bg-background/85 px-3 shadow-[var(--shadow-soft)] backdrop-blur-sm md:h-14 md:px-4">
+            <SidebarTrigger className="hidden md:inline-flex" />
+            <div className="flex min-w-0 items-center gap-2 md:hidden">
+              <img
+                src="/favicon-64x64.png"
+                alt=""
+                className="h-7 w-7 shrink-0 rounded-md"
+                aria-hidden
+              />
+              <span className="truncate text-sm font-semibold">Éden CRM</span>
+            </div>
+            <span className="hidden text-sm font-medium text-muted-foreground md:inline">
+              Éden Marketing CRM
+            </span>
             <div className="ml-auto flex items-center gap-1">
               <ThemeToggle />
               <UserMenu />
             </div>
           </header>
-          <main className="flex-1 p-6">
+          <main className="flex-1 p-4 pb-main-mobile md:p-6">
             {/* Required: nested routes render here. */}
             <FadeIn>
               <Outlet />
             </FadeIn>
           </main>
         </div>
+        <MobileTabBar />
       </div>
     </SidebarProvider>
   );

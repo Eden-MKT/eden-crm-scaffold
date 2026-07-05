@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, Users, Wallet } from "lucide-react";
 
+import { isNavActive, MAIN_NAV } from "@/lib/nav";
 import {
   Sidebar,
   SidebarContent,
@@ -13,19 +13,11 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-// Itens de navegação principal do CRM.
-const navItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Clientes", url: "/clientes", icon: Users },
-  { title: "Financeiro", url: "/financeiro", icon: Wallet },
-];
-
 export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const isActive = (url: string) => (url === "/" ? pathname === "/" : pathname.startsWith(url));
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="icon" className="hidden md:flex">
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-3">
           <img src="/favicon-64x64.png" alt="Éden Marketing" className="h-8 w-8 rounded-md" />
@@ -40,8 +32,8 @@ export function AppSidebar() {
           <SidebarGroupLabel>Navegação</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => {
-                const active = isActive(item.url);
+              {MAIN_NAV.map((item) => {
+                const active = isNavActive(pathname, item.url);
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton

@@ -92,8 +92,8 @@ export function ClientKanban({ clients, onCardClick }: ClientKanbanProps) {
       onDragEnd={handleDragEnd}
       onDragCancel={() => setActiveClient(null)}
     >
-      <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">Responsável:</span>
+      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-muted-foreground md:text-xs">
+        <span className="w-full font-medium text-foreground sm:w-auto">Responsável:</span>
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: ASSIGNEE_COLORS.filipe }} />
           {TEAM_MEMBER_LABELS.filipe}
@@ -104,7 +104,7 @@ export function ClientKanban({ clients, onCardClick }: ClientKanbanProps) {
         </span>
       </div>
 
-      <div className="flex gap-4 overflow-x-auto pb-4">
+      <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-4 md:mx-0 md:snap-none md:px-0">
         {STAGES.map((stage) => (
           <KanbanColumn
             key={stage.id}

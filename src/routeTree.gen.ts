@@ -9,10 +9,17 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as IaWhatsappRouteImport } from './routes/ia-whatsapp'
 import { Route as FinanceiroRouteImport } from './routes/financeiro'
 import { Route as ClientesRouteImport } from './routes/clientes'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ConectarTokenRouteImport } from './routes/conectar.$token'
 
+const IaWhatsappRoute = IaWhatsappRouteImport.update({
+  id: '/ia-whatsapp',
+  path: '/ia-whatsapp',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FinanceiroRoute = FinanceiroRouteImport.update({
   id: '/financeiro',
   path: '/financeiro',
@@ -28,39 +35,70 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConectarTokenRoute = ConectarTokenRouteImport.update({
+  id: '/conectar/$token',
+  path: '/conectar/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/clientes': typeof ClientesRoute
   '/financeiro': typeof FinanceiroRoute
+  '/ia-whatsapp': typeof IaWhatsappRoute
+  '/conectar/$token': typeof ConectarTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/clientes': typeof ClientesRoute
   '/financeiro': typeof FinanceiroRoute
+  '/ia-whatsapp': typeof IaWhatsappRoute
+  '/conectar/$token': typeof ConectarTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/clientes': typeof ClientesRoute
   '/financeiro': typeof FinanceiroRoute
+  '/ia-whatsapp': typeof IaWhatsappRoute
+  '/conectar/$token': typeof ConectarTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/clientes' | '/financeiro'
+  fullPaths:
+    | '/'
+    | '/clientes'
+    | '/financeiro'
+    | '/ia-whatsapp'
+    | '/conectar/$token'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/clientes' | '/financeiro'
-  id: '__root__' | '/' | '/clientes' | '/financeiro'
+  to: '/' | '/clientes' | '/financeiro' | '/ia-whatsapp' | '/conectar/$token'
+  id:
+    | '__root__'
+    | '/'
+    | '/clientes'
+    | '/financeiro'
+    | '/ia-whatsapp'
+    | '/conectar/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ClientesRoute: typeof ClientesRoute
   FinanceiroRoute: typeof FinanceiroRoute
+  IaWhatsappRoute: typeof IaWhatsappRoute
+  ConectarTokenRoute: typeof ConectarTokenRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/ia-whatsapp': {
+      id: '/ia-whatsapp'
+      path: '/ia-whatsapp'
+      fullPath: '/ia-whatsapp'
+      preLoaderRoute: typeof IaWhatsappRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/financeiro': {
       id: '/financeiro'
       path: '/financeiro'
@@ -82,6 +120,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/conectar/$token': {
+      id: '/conectar/$token'
+      path: '/conectar/$token'
+      fullPath: '/conectar/$token'
+      preLoaderRoute: typeof ConectarTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +134,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ClientesRoute: ClientesRoute,
   FinanceiroRoute: FinanceiroRoute,
+  IaWhatsappRoute: IaWhatsappRoute,
+  ConectarTokenRoute: ConectarTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

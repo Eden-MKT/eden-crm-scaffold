@@ -66,12 +66,14 @@ function ClientesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Clientes</h1>
+          <h1 className="text-xl font-semibold md:text-2xl">Clientes</h1>
           <p className="text-sm text-muted-foreground">Gestão de clientes da Éden Marketing.</p>
         </div>
-        <CreateClientDialog />
+        <div className="w-full sm:w-auto">
+          <CreateClientDialog />
+        </div>
       </div>
 
       {isLoading && <p className="text-sm text-muted-foreground">Carregando clientes…</p>}
@@ -87,9 +89,13 @@ function ClientesPage() {
           onValueChange={(v) => setActiveTab(v as ClientesTab)}
           className="space-y-6"
         >
-          <TabsList>
-            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-            <TabsTrigger value="kanban">Quadro de Clientes</TabsTrigger>
+          <TabsList className="w-full justify-start overflow-x-auto">
+            <TabsTrigger value="dashboard" className="shrink-0">
+              Dashboard
+            </TabsTrigger>
+            <TabsTrigger value="kanban" className="shrink-0">
+              Quadro de Clientes
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard">

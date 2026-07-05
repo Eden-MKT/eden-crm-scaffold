@@ -139,7 +139,7 @@ export function CreateClientDialog() {
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogTrigger asChild>
-        <Button size="lg" className="gap-2">
+        <Button size="lg" className="w-full gap-2 sm:w-auto">
           <Plus className="h-4 w-4" />
           Cadastrar Cliente
         </Button>

@@ -242,6 +242,17 @@
       var(--background) 60%
     );
   }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pb-main-mobile {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  }
+  @media (min-width: 768px) {
+    .pb-main-mobile {
+      padding-bottom: 0;
+    }
+  }
 }
 
 /* Acessibilidade: respeita quem prefere menos movimento. */
