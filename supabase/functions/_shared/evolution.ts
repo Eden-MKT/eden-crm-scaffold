@@ -85,17 +85,20 @@ export function deleteInstance(instance: string) {
 }
 
 // Envia texto. `delay` (ms) faz a Evolution exibir "digitando…" (composing)
-// automaticamente durante a espera. Retorna { key: { id }, ... }.
+// automaticamente durante a espera. `quoted` faz a mensagem sair como "resposta"
+// (reply/citar) a uma mensagem existente. Retorna { key: { id }, ... }.
 export function sendText(
   instance: string,
   number: string,
   text: string,
   delay: number,
+  quoted?: unknown,
 ) {
   return call("POST", `/message/sendText/${encodeURIComponent(instance)}`, {
     number,
     text,
     delay,
+    ...(quoted ? { quoted } : {}),
   });
 }
 

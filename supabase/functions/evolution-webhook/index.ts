@@ -14,6 +14,8 @@ import {
 
 const DEBOUNCE_MS = 7000;
 const HISTORY = 20;
+// Chance de cada mensagem da IA sair como "resposta/citar" à mensagem do cliente.
+const REPLY_QUOTE_PROBABILITY = 0.2;
 
 function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -470,13 +472,29 @@ async function runPipeline(
       .single();
     if (fresh?.last_inbound_message_id !== triggerMessageId) return;
 
+    // Mensagem que está sendo respondida (para o recurso "responder/citar").
+    const { data: inbound } = await db
+      .from("whatsapp_messages")
+      .select("evolution_id, content")
+      .eq("id", triggerMessageId)
+      .maybeSingle();
+    const inboundEvoId: string | null = inbound?.evolution_id ?? null;
+    const quoted = inboundEvoId
+      ? {
+          key: { id: inboundEvoId, remoteJid, fromMe: false },
+          message: { conversation: inbound?.content ?? "" },
+        }
+      : null;
+
     const bubbles = splitBubbles(finalText);
     for (const bubble of bubbles) {
+      const withQuote = quoted && Math.random() < REPLY_QUOTE_PROBABILITY;
       const r = (await evo.sendText(
         String(agent.instance_name),
         remoteJid,
         bubble,
         typingDelay(bubble),
+        withQuote ? quoted : undefined,
       )) as { key?: { id?: string } };
       const now = new Date().toISOString();
       await db.from("whatsapp_messages").insert({
