@@ -34,6 +34,7 @@ const FUNCTIONS = [
   "whatsapp-connect",
   "portal-metrics",
   "portal-manager",
+  "portal-chat",
 ];
 
 const sharedDir = join(FUNCTIONS_DIR, "_shared");

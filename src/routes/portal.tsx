@@ -3,7 +3,7 @@ import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
 import { isStaffUser } from "@/lib/team";
 import { PortalLogin } from "@/components/portal/portal-login";
-import { PortalDashboard } from "@/components/portal/portal-dashboard";
+import { PortalHome } from "@/components/portal/portal-home";
 
 export const Route = createFileRoute("/portal")({
   head: () => ({
@@ -29,5 +29,5 @@ function PortalPage() {
   // Staff não usa o portal — volta pro CRM.
   if (isStaffUser(user)) return <Navigate to="/" />;
 
-  return <PortalDashboard />;
+  return <PortalHome />;
 }

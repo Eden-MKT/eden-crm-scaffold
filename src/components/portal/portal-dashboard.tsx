@@ -10,15 +10,12 @@ import {
   YAxis,
 } from "recharts";
 import { useReducedMotion } from "motion/react";
-import { LogOut, MessageSquare, Target, TrendingUp, Users } from "lucide-react";
+import { MessageSquare, Target, TrendingUp, Users } from "lucide-react";
 
-import { useAuth } from "@/lib/auth";
 import { fetchPortalMetrics, portalKeys } from "@/lib/portal/queries";
 import { useChartTheme } from "@/lib/charts/use-chart-theme";
 import { StatCard } from "@/components/ui/stat-card";
 import { Stagger, StaggerItem } from "@/components/ui/fade-in";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 function dayLabel(iso: string): string {
@@ -30,7 +27,6 @@ function dayLabel(iso: string): string {
 }
 
 export function PortalDashboard() {
-  const { signOut } = useAuth();
   const chart = useChartTheme();
   const reduce = useReducedMotion();
 
@@ -41,7 +37,6 @@ export function PortalDashboard() {
   });
 
   const m = data?.metrics;
-  const clientName = data?.client?.name ?? "Seu negócio";
 
   const leadsDaily = (m?.leadsDaily ?? []).map((d) => ({
     label: dayLabel(d.day),
@@ -88,148 +83,132 @@ export function PortalDashboard() {
   ];
 
   return (
-    <div className="app-bg min-h-[100dvh]">
-      <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-border/80 bg-background/85 px-4 backdrop-blur-sm">
-        <img src="/favicon-64x64.png" alt="Éden" className="h-7 w-7 rounded-md" />
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold leading-tight">{clientName}</p>
-          <p className="text-xs text-muted-foreground">Portal · IA WhatsApp</p>
-        </div>
-        <div className="ml-auto flex items-center gap-1">
-          <ThemeToggle />
-          <Button variant="ghost" size="icon" onClick={() => void signOut()} title="Sair">
-            <LogOut className="h-4 w-4" />
-          </Button>
-        </div>
-      </header>
+    <main className="mx-auto h-full max-w-5xl space-y-6 overflow-y-auto p-4 md:p-6">
+      {isLoading && <p className="text-sm text-muted-foreground">Carregando…</p>}
+      {isError && (
+        <p className="text-sm text-destructive">
+          Não foi possível carregar os dados. Tente novamente.
+        </p>
+      )}
 
-      <main className="mx-auto max-w-5xl space-y-6 p-4 md:p-6">
-        {isLoading && <p className="text-sm text-muted-foreground">Carregando…</p>}
-        {isError && (
-          <p className="text-sm text-destructive">
-            Não foi possível carregar os dados. Tente novamente.
-          </p>
-        )}
-
-        {!isLoading && !isError && (
-          <>
-            {!m?.agentConnected && (
-              <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
-                A IA ainda não está conectada ao WhatsApp. Assim que a equipe conectar, seus números
-                aparecem aqui.
-              </div>
-            )}
-
-            <Stagger className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              {cards.map((c) => (
-                <StaggerItem key={c.title}>
-                  <StatCard title={c.title} value={c.value} accent={c.accent} icon={c.icon} />
-                </StaggerItem>
-              ))}
-            </Stagger>
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              <ChartCard title="Leads por dia (14 dias)">
-                <BarChart data={leadsDaily}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} vertical={false} />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fill: chart.axisTick, fontSize: 10 }}
-                    axisLine={{ stroke: chart.axisLine }}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    allowDecimals={false}
-                    tick={{ fill: chart.axisTick, fontSize: 11 }}
-                    axisLine={{ stroke: chart.axisLine }}
-                    tickLine={false}
-                    width={28}
-                  />
-                  <Tooltip contentStyle={chart.tooltip} cursor={{ fill: chart.cursorFill }} />
-                  <Bar
-                    dataKey="value"
-                    fill="#1F4FD6"
-                    radius={[4, 4, 0, 0]}
-                    isAnimationActive={!reduce}
-                  />
-                </BarChart>
-              </ChartCard>
-
-              <ChartCard title="Horários de pico (30 dias)">
-                <BarChart data={peakHours}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} vertical={false} />
-                  <XAxis
-                    dataKey="label"
-                    interval={2}
-                    tick={{ fill: chart.axisTick, fontSize: 9 }}
-                    axisLine={{ stroke: chart.axisLine }}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    allowDecimals={false}
-                    tick={{ fill: chart.axisTick, fontSize: 11 }}
-                    axisLine={{ stroke: chart.axisLine }}
-                    tickLine={false}
-                    width={28}
-                  />
-                  <Tooltip contentStyle={chart.tooltip} cursor={{ fill: chart.cursorFill }} />
-                  <Bar
-                    dataKey="value"
-                    fill="#3AA0FF"
-                    radius={[4, 4, 0, 0]}
-                    isAnimationActive={!reduce}
-                  />
-                </BarChart>
-              </ChartCard>
+      {!isLoading && !isError && (
+        <>
+          {!m?.agentConnected && (
+            <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
+              A IA ainda não está conectada ao WhatsApp. Assim que a equipe conectar, seus números
+              aparecem aqui.
             </div>
+          )}
 
-            <Card className="surface-depth">
-              <CardHeader>
-                <CardTitle className="text-sm">O que os clientes mais pedem</CardTitle>
-              </CardHeader>
-              <CardContent className="h-72">
-                {topTopics.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                    Ainda sem dados suficientes.
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={topTopics} layout="vertical" margin={{ left: 8, right: 16 }}>
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke={chart.gridStroke}
-                        horizontal={false}
-                      />
-                      <XAxis
-                        type="number"
-                        allowDecimals={false}
-                        tick={{ fill: chart.axisTick, fontSize: 11 }}
-                        axisLine={{ stroke: chart.axisLine }}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        type="category"
-                        dataKey="label"
-                        width={120}
-                        tick={{ fill: chart.axisTick, fontSize: 11 }}
-                        axisLine={{ stroke: chart.axisLine }}
-                        tickLine={false}
-                      />
-                      <Tooltip contentStyle={chart.tooltip} cursor={{ fill: chart.cursorFill }} />
-                      <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                        {topTopics.map((t) => (
-                          <Cell key={t.label} fill="#2FB67C" />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </CardContent>
-            </Card>
-          </>
-        )}
-      </main>
-    </div>
+          <Stagger className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {cards.map((c) => (
+              <StaggerItem key={c.title}>
+                <StatCard title={c.title} value={c.value} accent={c.accent} icon={c.icon} />
+              </StaggerItem>
+            ))}
+          </Stagger>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ChartCard title="Leads por dia (14 dias)">
+              <BarChart data={leadsDaily}>
+                <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fill: chart.axisTick, fontSize: 10 }}
+                  axisLine={{ stroke: chart.axisLine }}
+                  tickLine={false}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  tick={{ fill: chart.axisTick, fontSize: 11 }}
+                  axisLine={{ stroke: chart.axisLine }}
+                  tickLine={false}
+                  width={28}
+                />
+                <Tooltip contentStyle={chart.tooltip} cursor={{ fill: chart.cursorFill }} />
+                <Bar
+                  dataKey="value"
+                  fill="#1F4FD6"
+                  radius={[4, 4, 0, 0]}
+                  isAnimationActive={!reduce}
+                />
+              </BarChart>
+            </ChartCard>
+
+            <ChartCard title="Horários de pico (30 dias)">
+              <BarChart data={peakHours}>
+                <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  interval={2}
+                  tick={{ fill: chart.axisTick, fontSize: 9 }}
+                  axisLine={{ stroke: chart.axisLine }}
+                  tickLine={false}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  tick={{ fill: chart.axisTick, fontSize: 11 }}
+                  axisLine={{ stroke: chart.axisLine }}
+                  tickLine={false}
+                  width={28}
+                />
+                <Tooltip contentStyle={chart.tooltip} cursor={{ fill: chart.cursorFill }} />
+                <Bar
+                  dataKey="value"
+                  fill="#3AA0FF"
+                  radius={[4, 4, 0, 0]}
+                  isAnimationActive={!reduce}
+                />
+              </BarChart>
+            </ChartCard>
+          </div>
+
+          <Card className="surface-depth">
+            <CardHeader>
+              <CardTitle className="text-sm">O que os clientes mais pedem</CardTitle>
+            </CardHeader>
+            <CardContent className="h-72">
+              {topTopics.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  Ainda sem dados suficientes.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={topTopics} layout="vertical" margin={{ left: 8, right: 16 }}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={chart.gridStroke}
+                      horizontal={false}
+                    />
+                    <XAxis
+                      type="number"
+                      allowDecimals={false}
+                      tick={{ fill: chart.axisTick, fontSize: 11 }}
+                      axisLine={{ stroke: chart.axisLine }}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="label"
+                      width={120}
+                      tick={{ fill: chart.axisTick, fontSize: 11 }}
+                      axisLine={{ stroke: chart.axisLine }}
+                      tickLine={false}
+                    />
+                    <Tooltip contentStyle={chart.tooltip} cursor={{ fill: chart.cursorFill }} />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                      {topTopics.map((t) => (
+                        <Cell key={t.label} fill="#2FB67C" />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+    </main>
   );
 }
 
