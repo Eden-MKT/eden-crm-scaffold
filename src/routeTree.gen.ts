@@ -9,12 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as PortalRouteImport } from './routes/portal'
 import { Route as IaWhatsappRouteImport } from './routes/ia-whatsapp'
 import { Route as FinanceiroRouteImport } from './routes/financeiro'
 import { Route as ClientesRouteImport } from './routes/clientes'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ConectarTokenRouteImport } from './routes/conectar.$token'
 
+const PortalRoute = PortalRouteImport.update({
+  id: '/portal',
+  path: '/portal',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IaWhatsappRoute = IaWhatsappRouteImport.update({
   id: '/ia-whatsapp',
   path: '/ia-whatsapp',
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/clientes': typeof ClientesRoute
   '/financeiro': typeof FinanceiroRoute
   '/ia-whatsapp': typeof IaWhatsappRoute
+  '/portal': typeof PortalRoute
   '/conectar/$token': typeof ConectarTokenRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/clientes': typeof ClientesRoute
   '/financeiro': typeof FinanceiroRoute
   '/ia-whatsapp': typeof IaWhatsappRoute
+  '/portal': typeof PortalRoute
   '/conectar/$token': typeof ConectarTokenRoute
 }
 export interface FileRoutesById {
@@ -61,6 +69,7 @@ export interface FileRoutesById {
   '/clientes': typeof ClientesRoute
   '/financeiro': typeof FinanceiroRoute
   '/ia-whatsapp': typeof IaWhatsappRoute
+  '/portal': typeof PortalRoute
   '/conectar/$token': typeof ConectarTokenRoute
 }
 export interface FileRouteTypes {
@@ -70,15 +79,23 @@ export interface FileRouteTypes {
     | '/clientes'
     | '/financeiro'
     | '/ia-whatsapp'
+    | '/portal'
     | '/conectar/$token'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/clientes' | '/financeiro' | '/ia-whatsapp' | '/conectar/$token'
+  to:
+    | '/'
+    | '/clientes'
+    | '/financeiro'
+    | '/ia-whatsapp'
+    | '/portal'
+    | '/conectar/$token'
   id:
     | '__root__'
     | '/'
     | '/clientes'
     | '/financeiro'
     | '/ia-whatsapp'
+    | '/portal'
     | '/conectar/$token'
   fileRoutesById: FileRoutesById
 }
@@ -87,11 +104,19 @@ export interface RootRouteChildren {
   ClientesRoute: typeof ClientesRoute
   FinanceiroRoute: typeof FinanceiroRoute
   IaWhatsappRoute: typeof IaWhatsappRoute
+  PortalRoute: typeof PortalRoute
   ConectarTokenRoute: typeof ConectarTokenRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/portal': {
+      id: '/portal'
+      path: '/portal'
+      fullPath: '/portal'
+      preLoaderRoute: typeof PortalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ia-whatsapp': {
       id: '/ia-whatsapp'
       path: '/ia-whatsapp'
@@ -135,6 +160,7 @@ const rootRouteChildren: RootRouteChildren = {
   ClientesRoute: ClientesRoute,
   FinanceiroRoute: FinanceiroRoute,
   IaWhatsappRoute: IaWhatsappRoute,
+  PortalRoute: PortalRoute,
   ConectarTokenRoute: ConectarTokenRoute,
 }
 export const routeTree = rootRouteImport

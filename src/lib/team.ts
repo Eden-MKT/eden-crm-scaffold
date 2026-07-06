@@ -1,22 +1,27 @@
+import type { User } from "@supabase/supabase-js";
+
 import { useAuth } from "@/lib/auth";
 
 export type TeamMember = "filipe" | "joao" | null;
 
 const DEFAULT_FILIPE_EMAIL = "filipesenna59@gmail.com";
-const DEFAULT_JOAO_EMAILS = [
-  "joaopaulorodrigues97@gmail.com",
-  "joaopaulorodrigues97@hotmail.com",
-];
+const DEFAULT_JOAO_EMAILS = ["joaopaulorodrigues97@gmail.com", "joaopaulorodrigues97@hotmail.com"];
 
 function parseEmailList(envValue: string | undefined, defaults: string[]): string[] {
   const raw = envValue ?? defaults.join(",");
-  return [...new Set(raw.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean))];
+  return [
+    ...new Set(
+      raw
+        .split(",")
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ];
 }
 
-const FILIPE_EMAILS = parseEmailList(
-  import.meta.env.VITE_TEAM_FILIPE_EMAIL as string | undefined,
-  [DEFAULT_FILIPE_EMAIL],
-);
+const FILIPE_EMAILS = parseEmailList(import.meta.env.VITE_TEAM_FILIPE_EMAIL as string | undefined, [
+  DEFAULT_FILIPE_EMAIL,
+]);
 
 const JOAO_EMAILS = parseEmailList(
   (import.meta.env.VITE_TEAM_JOAO_EMAILS as string | undefined) ??
@@ -51,6 +56,25 @@ export function resolveTeamMember(email: string | null | undefined): TeamMember 
 export function useTeamMember(): TeamMember {
   const { user } = useAuth();
   return resolveTeamMember(user?.email);
+}
+
+/**
+ * É usuário da equipe (staff = acesso ao CRM)? True se o e-mail está na lista
+ * OU se app_metadata.role === 'super_admin'. Usado só para roteamento — a
+ * segurança real dos dados é garantida por RLS (is_staff) + edge functions.
+ */
+export function isStaffUser(user: User | null | undefined): boolean {
+  if (!user) return false;
+  const role = (user.app_metadata as { role?: string } | undefined)?.role;
+  if (role === "super_admin") return true;
+  return resolveTeamMember(user.email) !== null;
+}
+
+/** É um usuário do portal do cliente (não-staff, mapeado a um cliente)? */
+export function isPortalClientUser(user: User | null | undefined): boolean {
+  if (!user) return false;
+  const role = (user.app_metadata as { role?: string } | undefined)?.role;
+  return role === "client" || !isStaffUser(user);
 }
 
 export function isTeamConfigured(): boolean {

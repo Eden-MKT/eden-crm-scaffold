@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
+  Navigate,
   createRootRouteWithContext,
   useRouter,
   useRouterState,
@@ -19,6 +20,7 @@ import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { MotionConfig } from "motion/react";
 import { ThemeProvider } from "@/lib/theme";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { isStaffUser } from "@/lib/team";
 import { LoginPage } from "@/components/auth/login-page";
 import { UserMenu } from "@/components/auth/user-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -170,14 +172,14 @@ function RootComponent() {
   );
 }
 
-// Controla o acesso: carrega sessão → login → shell do app.
+// Controla o acesso: carrega sessão → login → shell (CRM staff) ou portal (cliente).
 function AuthGate() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { loading, session } = useAuth();
+  const { loading, session, user } = useAuth();
 
-  // Rotas públicas (ex.: página de QR do cliente) renderizam fora do AppShell,
-  // sem exigir sessão. Checado antes de loading/login (SSR-safe via router).
-  if (pathname.startsWith("/conectar")) {
+  // Rotas com shell próprio (QR público, portal do cliente) renderizam fora do
+  // AppShell. Checado antes de loading/login (SSR-safe via router).
+  if (pathname.startsWith("/conectar") || pathname.startsWith("/portal")) {
     return <Outlet />;
   }
 
@@ -191,6 +193,11 @@ function AuthGate() {
 
   if (!session) {
     return <LoginPage />;
+  }
+
+  // Cliente-portal logado que caiu numa rota interna → manda pro portal dele.
+  if (!isStaffUser(user)) {
+    return <Navigate to="/portal" />;
   }
 
   return <AppShell />;

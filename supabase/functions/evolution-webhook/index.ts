@@ -35,6 +35,31 @@ const MARK_TOOL = {
   },
 };
 
+const TOPIC_VALUES = [
+  "Agendamento",
+  "Preço/Orçamento",
+  "Dúvida",
+  "Suporte",
+  "Reclamação",
+  "Outro",
+];
+
+const CLASSIFY_TOOL = {
+  type: "function",
+  function: {
+    name: "classificar_assunto",
+    description:
+      "Classifique o ASSUNTO PRINCIPAL desta conversa em uma categoria. Chame sempre a cada resposta, atualizando se o assunto mudar.",
+    parameters: {
+      type: "object",
+      properties: {
+        assunto: { type: "string", enum: TOPIC_VALUES },
+      },
+      required: ["assunto"],
+    },
+  },
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return preflight();
 
@@ -399,7 +424,7 @@ async function runPipeline(
         model,
         messages,
         temperature: Number(agent.temperature ?? 0.7),
-        tools: [MARK_TOOL],
+        tools: [MARK_TOOL, CLASSIFY_TOOL],
       });
       await logUsage(db, String(agent.id), conversationId, "chat", model, r.promptTokens, r.completionTokens, chatCostUsd(model, r.promptTokens, r.completionTokens));
 
@@ -411,6 +436,17 @@ async function runPipeline(
               .from("whatsapp_conversations")
               .update({ converted: true, converted_at: new Date().toISOString() })
               .eq("id", conversationId);
+          } else if (tc.name === "classificar_assunto") {
+            try {
+              const assunto = JSON.parse(tc.arguments || "{}").assunto;
+              if (assunto)
+                await db
+                  .from("whatsapp_conversations")
+                  .update({ topic: String(assunto) })
+                  .eq("id", conversationId);
+            } catch {
+              /* ignora argumentos inválidos */
+            }
           }
           messages.push({
             role: "tool",

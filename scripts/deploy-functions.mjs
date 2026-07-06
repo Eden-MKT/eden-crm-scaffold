@@ -28,7 +28,13 @@ const REF = new URL(env.VITE_SUPABASE_URL).hostname.split(".")[0];
 const FUNCTIONS_DIR = join(root, "supabase", "functions");
 
 // verify_jwt false em todas (validação é feita dentro de cada função).
-const FUNCTIONS = ["evolution-webhook", "evolution-manager", "whatsapp-connect"];
+const FUNCTIONS = [
+  "evolution-webhook",
+  "evolution-manager",
+  "whatsapp-connect",
+  "portal-metrics",
+  "portal-manager",
+];
 
 const sharedDir = join(FUNCTIONS_DIR, "_shared");
 const sharedFiles = readdirSync(sharedDir).map((f) => ({

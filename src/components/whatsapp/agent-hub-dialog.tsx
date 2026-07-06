@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { MessageCircle, Settings, Plug } from "lucide-react";
+import { LayoutDashboard, MessageCircle, Settings, Plug } from "lucide-react";
 
 import { ensureAgent, whatsappKeys } from "@/lib/whatsapp/queries";
 import type { AgentWithClient } from "@/lib/whatsapp/queries";
@@ -16,6 +16,7 @@ import { ConnectionBadge } from "./status-badge";
 import { AgentSettingsSheet } from "./agent-settings-sheet";
 import { ConnectionPanel } from "./connection-panel";
 import { ChatDialog } from "./chat-dialog";
+import { ClientPortalPanel } from "./client-portal-panel";
 
 interface AgentHubDialogProps {
   item: AgentWithClient;
@@ -24,7 +25,7 @@ interface AgentHubDialogProps {
 }
 
 export function AgentHubDialog({ item, open, onOpenChange }: AgentHubDialogProps) {
-  const [sub, setSub] = useState<"settings" | "chat" | "connection" | null>(null);
+  const [sub, setSub] = useState<"settings" | "chat" | "connection" | "portal" | null>(null);
 
   // Garante o agente (cria on-demand) ao abrir o hub.
   const { data: agent, isLoading } = useQuery({
@@ -76,14 +77,16 @@ export function AgentHubDialog({ item, open, onOpenChange }: AgentHubDialogProps
                   <span className="text-[11px] text-muted-foreground">Conversas em tempo real</span>
                 </button>
               </div>
-              <Button
-                variant="outline"
-                className="w-full gap-2"
-                onClick={() => setSub("connection")}
-              >
-                <Plug className="h-4 w-4" />
-                Conexão
-              </Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="outline" className="gap-2" onClick={() => setSub("connection")}>
+                  <Plug className="h-4 w-4" />
+                  Conexão
+                </Button>
+                <Button variant="outline" className="gap-2" onClick={() => setSub("portal")}>
+                  <LayoutDashboard className="h-4 w-4" />
+                  Painel do cliente
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
@@ -108,6 +111,13 @@ export function AgentHubDialog({ item, open, onOpenChange }: AgentHubDialogProps
             clientName={item.client.name}
             open={sub === "chat"}
             onOpenChange={(o) => setSub(o ? "chat" : null)}
+          />
+          <ClientPortalPanel
+            clientId={item.client.id}
+            clientName={item.client.name}
+            clientEmail={item.client.email}
+            open={sub === "portal"}
+            onOpenChange={(o) => setSub(o ? "portal" : null)}
           />
         </>
       )}
