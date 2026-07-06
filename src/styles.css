@@ -253,6 +253,30 @@
       padding-bottom: 0;
     }
   }
+  /* Altura de página "cheia" dentro do AppShell: desconta header (3rem) e,
+     no mobile, a tab bar flutuante (~5.5rem) + safe area. */
+  .h-page-shell {
+    height: calc(100dvh - 3rem - 5.5rem - env(safe-area-inset-bottom, 0px));
+  }
+  @media (min-width: 768px) {
+    .h-page-shell {
+      height: calc(100dvh - 6.5rem);
+    }
+  }
+  /* Barra translúcida estilo iOS (headers e tab bars). */
+  .ios-blur-bar {
+    background: color-mix(in oklab, var(--background) 78%, transparent);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    backdrop-filter: blur(20px) saturate(1.4);
+    border-color: color-mix(in oklab, var(--border) 60%, transparent);
+  }
+  /* Press state iOS em elementos tocáveis. */
+  .press-scale {
+    transition: transform 0.15s ease;
+  }
+  .press-scale:active {
+    transform: scale(0.96);
+  }
 }
 
 /* Acessibilidade: respeita quem prefere menos movimento. */

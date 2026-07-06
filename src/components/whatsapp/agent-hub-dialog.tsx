@@ -57,7 +57,7 @@ export function AgentHubDialog({ item, open, onOpenChange }: AgentHubDialogProps
                 <button
                   type="button"
                   onClick={() => setSub("settings")}
-                  className="surface-depth surface-depth-hover flex flex-col items-center gap-2 rounded-xl p-5 text-center"
+                  className="press-scale surface-depth surface-depth-hover flex flex-col items-center gap-2 rounded-xl p-5 text-center"
                 >
                   <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/15 text-primary">
                     <Settings className="h-5 w-5" />
@@ -68,7 +68,7 @@ export function AgentHubDialog({ item, open, onOpenChange }: AgentHubDialogProps
                 <button
                   type="button"
                   onClick={() => setSub("chat")}
-                  className="surface-depth surface-depth-hover flex flex-col items-center gap-2 rounded-xl p-5 text-center"
+                  className="press-scale surface-depth surface-depth-hover flex flex-col items-center gap-2 rounded-xl p-5 text-center"
                 >
                   <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/15 text-primary">
                     <MessageCircle className="h-5 w-5" />

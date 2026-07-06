@@ -71,7 +71,7 @@ export function ClientDashboard({ clients }: ClientDashboardProps) {
           <CardHeader>
             <CardTitle className="text-sm">Distribuição por etapa</CardTitle>
           </CardHeader>
-          <CardContent className="h-72">
+          <CardContent className="h-56 md:h-72">
             {hasClients ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -107,7 +107,7 @@ export function ClientDashboard({ clients }: ClientDashboardProps) {
           <CardHeader>
             <CardTitle className="text-sm">Clientes por etapa</CardTitle>
           </CardHeader>
-          <CardContent className="h-72">
+          <CardContent className="h-56 md:h-72">
             {hasClients ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>

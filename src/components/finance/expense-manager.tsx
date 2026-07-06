@@ -187,15 +187,15 @@ function ExpenseRow({
     entry.dueDate < new Date().toISOString().slice(0, 10);
 
   return (
-    <li className="flex items-center gap-3 rounded-md border border-border bg-secondary/30 p-2">
-      <div className="min-w-0 flex-1">
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-border bg-secondary/30 p-2">
+      <div className="min-w-0 flex-1 basis-full sm:basis-0">
         <p className="truncate text-sm text-foreground">{entry.description}</p>
         <p className="text-[11px] text-muted-foreground">
           {entry.dueDate ? `Vence ${formatDate(entry.dueDate)}` : "Sem prazo"}
           {overdue && " · atrasada"}
         </p>
       </div>
-      <span className="text-sm font-semibold text-foreground">
+      <span className="ml-auto text-sm font-semibold text-foreground sm:ml-0">
         {formatCurrencyBRL(entry.amount)}
       </span>
       <Badge variant={entry.status === "pago" ? "success" : overdue ? "destructive" : "warning"}>

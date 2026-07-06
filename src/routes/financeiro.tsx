@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchFinanceEntries, financeKeys } from "@/lib/finance/queries";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FadeIn } from "@/components/ui/fade-in";
+import { PageHeader } from "@/components/ui/page-header";
 import { FinanceDashboard } from "@/components/finance/finance-dashboard";
 import { ExpenseManager } from "@/components/finance/expense-manager";
 
@@ -29,12 +30,10 @@ function FinanceiroPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold md:text-2xl">Financeiro</h1>
-        <p className="text-sm text-muted-foreground">
-          Receitas dos contratos, contas a receber e despesas da empresa.
-        </p>
-      </div>
+      <PageHeader
+        title="Financeiro"
+        subtitle="Receitas dos contratos, contas a receber e despesas da empresa."
+      />
 
       {isLoading && <p className="text-sm text-muted-foreground">Carregando financeiro…</p>}
       {isError && (

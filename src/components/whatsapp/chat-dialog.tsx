@@ -32,7 +32,7 @@ export function ChatDialog({ agent, clientName, open, onOpenChange }: ChatDialog
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[92vh] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0">
+      <DialogContent className="flex h-[92vh] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:w-full max-sm:rounded-none">
         <DialogHeader className="border-b border-border px-4 py-3">
           <DialogTitle className="text-base">Chat — {clientName}</DialogTitle>
         </DialogHeader>

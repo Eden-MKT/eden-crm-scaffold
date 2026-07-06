@@ -11,6 +11,7 @@ import {
 } from "@/lib/whatsapp/queries";
 import { StatCard } from "@/components/ui/stat-card";
 import { Stagger, StaggerItem } from "@/components/ui/fade-in";
+import { PageHeader } from "@/components/ui/page-header";
 import { AgentCard } from "@/components/whatsapp/agent-card";
 import { AgentHubDialog } from "@/components/whatsapp/agent-hub-dialog";
 
@@ -74,13 +75,11 @@ function IaWhatsappPage() {
   ];
 
   return (
-    <div className="flex h-[calc(100dvh-6.5rem)] min-h-0 flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight md:text-2xl">IA WhatsApp</h1>
-        <p className="text-sm text-muted-foreground">
-          Agentes de atendimento por IA no WhatsApp de cada cliente.
-        </p>
-      </div>
+    <div className="h-page-shell flex min-h-0 flex-col gap-4">
+      <PageHeader
+        title="IA WhatsApp"
+        subtitle="Agentes de atendimento por IA no WhatsApp de cada cliente."
+      />
 
       <Stagger className="grid grid-cols-2 gap-3 md:grid-cols-5">
         {cards.map((c) => (
@@ -96,7 +95,7 @@ function IaWhatsappPage() {
             Cadastre clientes para criar agentes de IA.
           </p>
         ) : (
-          <div className="grid auto-rows-min grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid auto-rows-min grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {items?.map((item) => (
               <AgentCard key={item.client.id} item={item} onOpen={() => setSelected(item)} />
             ))}

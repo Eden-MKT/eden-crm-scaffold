@@ -4,6 +4,7 @@ import { Repeat, UserPlus, Users, Wallet } from "lucide-react";
 
 import { PendingTasksSection } from "@/components/dashboard/pending-tasks-section";
 import { Stagger, StaggerItem } from "@/components/ui/fade-in";
+import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { clientsKeys, fetchClients } from "@/lib/clients/queries";
 import { fetchAllTaskCompletions, taskKeys } from "@/lib/clients/task-queries";
@@ -84,10 +85,7 @@ function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Visão geral da operação da Éden Marketing.</p>
-      </div>
+      <PageHeader title="Dashboard" subtitle="Visão geral da operação da Éden Marketing." />
 
       <PendingTasksSection
         clients={list}

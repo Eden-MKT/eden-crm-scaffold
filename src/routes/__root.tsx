@@ -210,7 +210,7 @@ function AppShell() {
       <div className="app-bg flex min-h-screen w-full text-foreground">
         <AppSidebar />
         <div className="flex flex-1 flex-col">
-          <header className="sticky top-0 z-10 flex h-12 items-center gap-2 border-b border-border/80 bg-background/85 px-3 shadow-[var(--shadow-soft)] backdrop-blur-sm md:h-14 md:px-4">
+          <header className="ios-blur-bar sticky top-0 z-10 flex h-12 items-center gap-2 border-b px-3 shadow-[var(--shadow-soft)] md:h-14 md:px-4">
             <SidebarTrigger className="hidden md:inline-flex" />
             <div className="flex min-w-0 items-center gap-2 md:hidden">
               <img
@@ -231,7 +231,7 @@ function AppShell() {
           </header>
           <main className="flex-1 p-4 pb-main-mobile md:p-6">
             {/* Required: nested routes render here. */}
-            <FadeIn>
+            <FadeIn className="mx-auto w-full 2xl:max-w-7xl">
               <Outlet />
             </FadeIn>
           </main>

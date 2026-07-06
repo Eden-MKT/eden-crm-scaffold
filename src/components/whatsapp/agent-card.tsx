@@ -18,7 +18,7 @@ export function AgentCard({ item, onOpen }: AgentCardProps) {
       type="button"
       onClick={onOpen}
       className={cn(
-        "surface-depth surface-depth-hover group flex flex-col gap-3 rounded-xl p-4 text-left",
+        "press-scale surface-depth surface-depth-hover group flex flex-col gap-3 rounded-xl p-4 text-left",
       )}
     >
       <div className="flex items-start justify-between gap-2">

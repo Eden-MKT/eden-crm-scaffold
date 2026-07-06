@@ -7,6 +7,7 @@ import { fetchPortalMetrics, portalKeys } from "@/lib/portal/queries";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
+import { BottomTabBar } from "@/components/layout/bottom-tab-bar";
 import { PortalDashboard } from "./portal-dashboard";
 import { PortalChat } from "./portal-chat";
 
@@ -25,16 +26,16 @@ export function PortalHome() {
 
   return (
     <div className="app-bg flex h-[100dvh] flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border/80 bg-background/85 px-4 backdrop-blur-sm">
+      <header className="ios-blur-bar flex h-14 shrink-0 items-center gap-3 border-b px-4">
         <img src="/favicon-64x64.png" alt="Éden" className="h-7 w-7 rounded-md" />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold leading-tight">{clientName}</p>
           <p className="text-xs text-muted-foreground">Portal · IA WhatsApp</p>
         </div>
 
-        {/* Toggle Métricas | Histórico */}
         <div className="ml-auto flex items-center gap-1">
-          <div className="mr-1 flex rounded-lg border border-border p-0.5">
+          {/* Toggle no header — só desktop (no mobile vira tab bar embaixo). */}
+          <div className="mr-1 hidden rounded-lg border border-border p-0.5 md:flex">
             <ToggleBtn
               active={view === "metrics"}
               onClick={() => setView("metrics")}
@@ -58,6 +59,28 @@ export function PortalHome() {
       <div className="min-h-0 flex-1">
         {view === "metrics" ? <PortalDashboard /> : <PortalChat />}
       </div>
+
+      {/* Tab bar inferior estilo iOS — só mobile. */}
+      <BottomTabBar
+        floating={false}
+        className="md:hidden"
+        items={[
+          {
+            key: "metrics",
+            title: "Métricas",
+            icon: BarChart3,
+            active: view === "metrics",
+            onSelect: () => setView("metrics"),
+          },
+          {
+            key: "chat",
+            title: "Histórico",
+            icon: MessagesSquare,
+            active: view === "chat",
+            onSelect: () => setView("chat"),
+          },
+        ]}
+      />
     </div>
   );
 }
@@ -85,7 +108,7 @@ function ToggleBtn({
       )}
     >
       {icon}
-      <span className="hidden sm:inline">{label}</span>
+      <span>{label}</span>
     </button>
   );
 }

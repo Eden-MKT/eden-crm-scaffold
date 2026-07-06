@@ -24,7 +24,7 @@ export function LoginPage() {
   };
 
   return (
-    <div className="app-bg relative flex min-h-screen items-center justify-center px-4">
+    <div className="app-bg relative flex min-h-[100dvh] items-center justify-center px-4">
       <div className="absolute right-4 top-4">
         <ThemeToggle />
       </div>

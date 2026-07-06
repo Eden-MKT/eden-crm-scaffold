@@ -6,6 +6,7 @@ import { clientsKeys, fetchClients } from "@/lib/clients/queries";
 import type { Client } from "@/lib/clients/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FadeIn } from "@/components/ui/fade-in";
+import { PageHeader } from "@/components/ui/page-header";
 import { ClientKanban } from "@/components/clients/client-kanban";
 import { ClientDashboard } from "@/components/clients/client-dashboard";
 import { CreateClientDialog } from "@/components/clients/create-client-dialog";
@@ -66,15 +67,15 @@ function ClientesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
-        <div>
-          <h1 className="text-xl font-semibold md:text-2xl">Clientes</h1>
-          <p className="text-sm text-muted-foreground">Gestão de clientes da Éden Marketing.</p>
-        </div>
-        <div className="w-full sm:w-auto">
-          <CreateClientDialog />
-        </div>
-      </div>
+      <PageHeader
+        title="Clientes"
+        subtitle="Gestão de clientes da Éden Marketing."
+        action={
+          <div className="w-full sm:w-auto">
+            <CreateClientDialog />
+          </div>
+        }
+      />
 
       {isLoading && <p className="text-sm text-muted-foreground">Carregando clientes…</p>}
       {isError && (

@@ -167,7 +167,7 @@ export function PortalDashboard() {
             <CardHeader>
               <CardTitle className="text-sm">O que os clientes mais pedem</CardTitle>
             </CardHeader>
-            <CardContent className="h-72">
+            <CardContent className="h-56 md:h-72">
               {topTopics.length === 0 ? (
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                   Ainda sem dados suficientes.
@@ -190,7 +190,7 @@ export function PortalDashboard() {
                     <YAxis
                       type="category"
                       dataKey="label"
-                      width={120}
+                      width={84}
                       tick={{ fill: chart.axisTick, fontSize: 11 }}
                       axisLine={{ stroke: chart.axisLine }}
                       tickLine={false}
@@ -218,7 +218,7 @@ function ChartCard({ title, children }: { title: string; children: React.ReactEl
       <CardHeader>
         <CardTitle className="text-sm">{title}</CardTitle>
       </CardHeader>
-      <CardContent className="h-64">
+      <CardContent className="h-56 md:h-64">
         <ResponsiveContainer width="100%" height="100%">
           {children}
         </ResponsiveContainer>

@@ -94,7 +94,7 @@ export function FinanceDashboard({ entries }: FinanceDashboardProps) {
           <CardHeader>
             <CardTitle className="text-sm">Receita por plano</CardTitle>
           </CardHeader>
-          <CardContent className="h-72">
+          <CardContent className="h-56 md:h-72">
             {hasIncome ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -135,7 +135,7 @@ export function FinanceDashboard({ entries }: FinanceDashboardProps) {
           <CardHeader>
             <CardTitle className="text-sm">Receitas x Despesas</CardTitle>
           </CardHeader>
-          <CardContent className="h-72">
+          <CardContent className="h-56 md:h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={compare} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} vertical={false} />

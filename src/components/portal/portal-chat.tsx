@@ -20,9 +20,7 @@ export function PortalChat() {
   });
   const list: WhatsappConversation[] = data ?? [];
 
-  const current = selected
-    ? (list.find((c) => c.id === selected.id) ?? selected)
-    : null;
+  const current = selected ? (list.find((c) => c.id === selected.id) ?? selected) : null;
 
   return (
     <div className="grid h-full min-h-0 grid-cols-1 md:grid-cols-[320px_1fr]">

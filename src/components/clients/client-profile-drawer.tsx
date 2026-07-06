@@ -45,7 +45,7 @@ export function ClientProfileDrawer({ client, open, onOpenChange }: ClientProfil
               </SheetDescription>
             </SheetHeader>
 
-            <div className="space-y-6 px-4 pb-6">
+            <div className="space-y-6 pb-6">
               <section className="space-y-2 text-sm">
                 {client.company && <InfoRow icon={Building2} value={client.company} />}
                 {client.email && <InfoRow icon={Mail} value={client.email} />}
