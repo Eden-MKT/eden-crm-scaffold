@@ -12,7 +12,7 @@ import {
   uploadMedia,
 } from "../_shared/media.ts";
 
-const DEBOUNCE_MS = 7000;
+const DEBOUNCE_MS = 10000;
 const HISTORY = 20;
 // Chance de cada mensagem da IA sair como "resposta/citar" à mensagem do cliente.
 const REPLY_QUOTE_PROBABILITY = 0.2;
@@ -302,15 +302,16 @@ async function handleMessage(db: DB, instance: string, data: Record<string, unkn
     return;
   }
 
-  await db
-    .from("whatsapp_conversations")
-    .update({
-      last_message_at: sentAt,
-      last_message_preview: preview,
-      last_inbound_message_id: inserted.id,
-      unread_count: (conv.unread_count ?? 0) + 1,
-    })
-    .eq("id", conv.id);
+  // Mantém o nome do contato atualizado com o pushName do WhatsApp.
+  const pushName = String((data as { pushName?: string }).pushName ?? "").trim();
+  const convUpdate: Record<string, unknown> = {
+    last_message_at: sentAt,
+    last_message_preview: preview,
+    last_inbound_message_id: inserted.id,
+    unread_count: (conv.unread_count ?? 0) + 1,
+  };
+  if (pushName) convUpdate.contact_name = pushName;
+  await db.from("whatsapp_conversations").update(convUpdate).eq("id", conv.id);
 
   if (agent.ai_enabled && !conv.ai_paused) {
     // Responde 200 já; pipeline roda em background com debounce.
@@ -370,7 +371,16 @@ async function getOrCreateConversation(
   return created;
 }
 
-function buildSystemPrompt(agent: Record<string, unknown>): string {
+function buildSystemPrompt(
+  agent: Record<string, unknown>,
+  contact: { name: string | null; phone: string | null },
+): string {
+  const contactBlock =
+    `Dados do contato (vindos do WhatsApp): nome = ${
+      contact.name && contact.name.trim() ? contact.name.trim() : "desconhecido"
+    }; telefone = ${contact.phone ?? "desconhecido"}.` +
+    ` Só use o nome se for um nome real de pessoa; se estiver "desconhecido", não invente nem use placeholder.`;
+
   const parts = [
     agent.system_prompt ? String(agent.system_prompt) : "",
     agent.niche ? `Nicho do cliente: ${agent.niche}` : "",
@@ -379,6 +389,7 @@ function buildSystemPrompt(agent: Record<string, unknown>): string {
       ? `Objetivo do atendimento (conversão): ${agent.conversion_goal}`
       : "",
     agent.greeting ? `Saudação de referência: ${agent.greeting}` : "",
+    contactBlock,
     HUMANIZE_RULES,
   ];
   return parts.filter(Boolean).join("\n\n");
@@ -401,6 +412,17 @@ async function runPipeline(
   if (!claimed) return;
 
   try {
+    // Dados do contato (do WhatsApp) para personalizar sem inventar nome.
+    const { data: conv } = await db
+      .from("whatsapp_conversations")
+      .select("contact_name")
+      .eq("id", conversationId)
+      .maybeSingle();
+    const contact = {
+      name: conv?.contact_name ?? null,
+      phone: remoteJid.split("@")[0] || null,
+    };
+
     const { data: history } = await db
       .from("whatsapp_messages")
       .select("sender, content")
@@ -411,7 +433,7 @@ async function runPipeline(
 
     const model = String(agent.model ?? "gpt-4o-mini");
     const messages: ChatMessage[] = [
-      { role: "system", content: buildSystemPrompt(agent) },
+      { role: "system", content: buildSystemPrompt(agent, contact) },
       ...ordered.map((m: { sender: string; content: string | null }) => ({
         role: (m.sender === "contact" ? "user" : "assistant") as
           | "user"
@@ -488,6 +510,16 @@ async function runPipeline(
 
     const bubbles = splitBubbles(finalText);
     for (const bubble of bubbles) {
+      // Abort-no-meio: se o cliente mandou algo novo enquanto a IA envia as
+      // bolhas, para tudo — a invocação da mensagem nova responde com contexto
+      // completo (evita terminar uma resposta já desatualizada).
+      const { data: still } = await db
+        .from("whatsapp_conversations")
+        .select("last_inbound_message_id")
+        .eq("id", conversationId)
+        .single();
+      if (still?.last_inbound_message_id !== triggerMessageId) break;
+
       const withQuote = quoted && Math.random() < REPLY_QUOTE_PROBABILITY;
       const r = (await evo.sendText(
         String(agent.instance_name),
