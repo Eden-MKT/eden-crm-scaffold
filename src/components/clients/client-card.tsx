@@ -22,7 +22,7 @@ export function ClientCard({ client, onClick, overlay, dragging, className }: Cl
     <div
       onClick={onClick}
       className={cn(
-        "group surface-depth surface-depth-hover relative cursor-pointer rounded-xl p-3",
+        "press-scale group surface-depth surface-depth-hover relative cursor-pointer rounded-xl p-3",
         overlay && "rotate-2 scale-[1.03] shadow-xl ring-1 ring-primary/40 glow-primary",
         dragging && "opacity-40",
         className,
