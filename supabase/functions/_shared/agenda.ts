@@ -236,6 +236,9 @@ CONTEXTO MÉDICO (o cliente é um profissional/consultório de saúde):
   profissional. Em caso de urgência/emergência, oriente procurar atendimento imediato.
 - Não invente valores, endereços, datas ou nomes de profissionais que não estejam nas
   informações do negócio.
+- Perceba quando o paciente não quer mais conversar ou não quer agendar agora ("depois eu vejo",
+  "vou pensar", respostas curtas/evasivas): não insista, encerre com cordialidade e deixe a porta
+  aberta ("quando quiser, é só chamar").
 `.trim();
 
 // Instruções de agendamento específicas do agente (serviços + horário de atendimento).
@@ -270,6 +273,12 @@ export function buildAgendaPrompt(
 
   return `
 AGENDAMENTO (você pode agendar diretamente no sistema):
+- SEU OBJETIVO é qualificar o paciente, tirar todas as dúvidas e MARCAR A CONSULTA. Conduza a
+  conversa nessa direção, com cordialidade e sem pressão.
+- Enquanto o paciente demonstrar interesse e ainda não agendou, um "ok/tá/entendi" é apenas
+  CONFIRMAÇÃO — siga em frente (ex.: ofereça horários, confirme os dados). Não encerre no meio.
+- Se o paciente disser que não quer agendar agora ou demonstrar desinteresse, NÃO insista:
+  encerre com cordialidade e deixe a porta aberta.
 - Tipos de atendimento disponíveis:
 ${svc || "- Consulta (~60 min)"}
 - Horário de atendimento: ${hoursLines}${lunch}. Fuso: ${tz}.

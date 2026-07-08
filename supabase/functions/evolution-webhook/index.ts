@@ -3,7 +3,7 @@ import { json, preflight } from "../_shared/cors.ts";
 import * as evo from "../_shared/evolution.ts";
 import { chat, describeImage, transcribe, type ChatMessage } from "../_shared/openai.ts";
 import { chatCostUsd, transcriptionCostUsd } from "../_shared/pricing.ts";
-import { HUMANIZE_RULES, splitBubbles, typingDelay } from "../_shared/humanize.ts";
+import { HUMANIZE_RULES, NO_REPLY, splitBubbles, typingDelay } from "../_shared/humanize.ts";
 import {
   base64ToBytes,
   bytesToDataUrl,
@@ -691,6 +691,13 @@ async function runPipeline(
     }
 
     if (!finalText) return;
+
+    // Encerramento: se a IA emitiu o marcador de "sem resposta", não envia nada.
+    if (finalText.includes(NO_REPLY)) {
+      const cleaned = finalText.split(NO_REPLY).join("").trim();
+      if (!cleaned) return; // conversa já encerrada — silêncio
+      finalText = cleaned; // sobrou texto real: envia sem o marcador
+    }
 
     // Re-checa: chegou mensagem nova durante a geração? Descarta.
     const { data: fresh } = await db
