@@ -360,6 +360,7 @@ export interface Database {
           agenda_timezone: string;
           agenda_hours: Json;
           agenda_services: Json;
+          prompt_injection_enabled: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -389,6 +390,7 @@ export interface Database {
           agenda_timezone?: string;
           agenda_hours?: Json;
           agenda_services?: Json;
+          prompt_injection_enabled?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -418,6 +420,7 @@ export interface Database {
           agenda_timezone?: string;
           agenda_hours?: Json;
           agenda_services?: Json;
+          prompt_injection_enabled?: boolean;
           created_at?: string;
           updated_at?: string;
         };

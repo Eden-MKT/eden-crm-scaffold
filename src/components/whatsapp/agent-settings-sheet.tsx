@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { updateAgent, whatsappKeys } from "@/lib/whatsapp/queries";
+import { improvePrompt } from "@/lib/whatsapp/improve-prompt";
 import {
   DEFAULT_AGENDA_HOURS,
   WEEKDAYS,
@@ -68,7 +69,9 @@ export function AgentSettingsSheet({
     responseDelaySeconds: agent.responseDelaySeconds,
     isMedical: agent.isMedical,
     agendaEnabled: agent.agendaEnabled,
+    promptInjectionEnabled: agent.promptInjectionEnabled,
   });
+  const [improving, setImproving] = useState(false);
   const [extraFields, setExtraFields] = useState<AgentExtraField[]>(agent.extraFields);
   const [services, setServices] = useState<AgentService[]>(agent.agendaServices);
   const [hours, setHours] = useState<AgendaHours>(agent.agendaHours ?? DEFAULT_AGENDA_HOURS);
@@ -116,6 +119,23 @@ export function AgentSettingsSheet({
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao salvar."),
   });
 
+  const handleImprove = async () => {
+    setImproving(true);
+    try {
+      const improved = await improvePrompt(agent.id);
+      if (improved) {
+        set("systemPrompt", improved);
+        toast.success("Prompt melhorado — revise e clique em Salvar.");
+      } else {
+        toast.error("Não foi possível gerar o prompt.");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao melhorar o prompt.");
+    } finally {
+      setImproving(false);
+    }
+  };
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
@@ -135,6 +155,20 @@ export function AgentSettingsSheet({
             <Switch checked={form.aiEnabled} onCheckedChange={(v) => set("aiEnabled", v)} />
           </div>
 
+          <div className="flex items-center justify-between rounded-lg border border-border p-3">
+            <div className="pr-3">
+              <p className="text-sm font-medium">Habilitar Prompt Injection</p>
+              <p className="text-xs text-muted-foreground">
+                Aplica automaticamente boas práticas de atendimento (descoberta, tom, CTA,
+                anti-alucinação), adaptadas ao nicho — além do seu prompt.
+              </p>
+            </div>
+            <Switch
+              checked={form.promptInjectionEnabled}
+              onCheckedChange={(v) => set("promptInjectionEnabled", v)}
+            />
+          </div>
+
           <Field label="Nicho do cliente">
             <Input
               value={form.niche}
@@ -143,14 +177,31 @@ export function AgentSettingsSheet({
             />
           </Field>
 
-          <Field label="Prompt do agente (personalidade e instruções)">
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-xs text-muted-foreground">
+                Prompt do agente (personalidade e instruções)
+              </Label>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 px-2 text-xs"
+                disabled={improving}
+                onClick={handleImprove}
+                title="Melhorar o prompt com IA"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {improving ? "Melhorando…" : "Melhorar com IA"}
+              </Button>
+            </div>
             <Textarea
               rows={6}
               value={form.systemPrompt}
               onChange={(e) => set("systemPrompt", e.target.value)}
               placeholder="Você é o atendente da clínica X. Seu papel é qualificar leads e agendar avaliações…"
             />
-          </Field>
+          </div>
 
           <Field label="Informações do negócio (dados, ofertas, horários, FAQ)">
             <Textarea

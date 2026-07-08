@@ -22,6 +22,7 @@ import {
   type AgendaHours,
   type AgentService,
 } from "../_shared/agenda.ts";
+import { buildInjectionLayer } from "../_shared/best-practices.ts";
 
 const DEBOUNCE_MS = 15000; // fallback quando o agente não tem response_delay_seconds
 const HISTORY = 20;
@@ -450,6 +451,7 @@ function buildSystemPrompt(
   const parts = [
     agent.system_prompt ? String(agent.system_prompt) : "",
     agent.niche ? `Nicho do cliente: ${agent.niche}` : "",
+    agent.prompt_injection_enabled !== false ? buildInjectionLayer(agent) : "",
     agent.is_medical === true ? MEDICAL_PROMPT : "",
     agent.business_info ? `Informações do negócio: ${agent.business_info}` : "",
     buildClientDataBlock(agent),

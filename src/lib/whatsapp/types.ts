@@ -84,6 +84,7 @@ export interface WhatsappAgent {
   agendaTimezone: string;
   agendaHours: AgendaHours;
   agendaServices: AgentService[];
+  promptInjectionEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -167,6 +168,7 @@ export function mapAgent(row: AgentRow): WhatsappAgent {
     agendaTimezone: row.agenda_timezone ?? "America/Sao_Paulo",
     agendaHours: parseHours(row.agenda_hours),
     agendaServices: parseServices(row.agenda_services),
+    promptInjectionEnabled: row.prompt_injection_enabled ?? true,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

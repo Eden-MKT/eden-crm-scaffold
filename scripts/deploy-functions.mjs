@@ -36,6 +36,7 @@ const FUNCTIONS = [
   "portal-manager",
   "portal-chat",
   "portal-agenda",
+  "improve-prompt",
 ];
 
 const sharedDir = join(FUNCTIONS_DIR, "_shared");
@@ -67,11 +68,7 @@ async function deploy(slug) {
     `${slug}/index.ts`,
   );
   for (const f of sharedFiles) {
-    form.append(
-      "file",
-      new Blob([f.content], { type: "application/typescript" }),
-      f.path,
-    );
+    form.append("file", new Blob([f.content], { type: "application/typescript" }), f.path);
   }
 
   const res = await fetch(
