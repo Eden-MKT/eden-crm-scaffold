@@ -9,6 +9,12 @@ export type MessageDirection = "in" | "out";
 export type MessageSender = "contact" | "ai" | "human";
 export type MessageType = "text" | "image" | "audio" | "video" | "document" | "sticker" | "other";
 
+// Campo livre extra de dados do cliente (rótulo + valor) — armazenado em extra_fields (JSONB).
+export interface AgentExtraField {
+  label: string;
+  value: string;
+}
+
 export interface WhatsappAgent {
   id: string;
   clientId: string;
@@ -23,6 +29,13 @@ export interface WhatsappAgent {
   temperature: number;
   aiEnabled: boolean;
   greeting: string;
+  responsibleName: string;
+  responsiblePhone: string;
+  businessAddress: string;
+  profession: string;
+  registrationNumber: string;
+  extraFields: AgentExtraField[];
+  responseDelaySeconds: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -56,6 +69,14 @@ export interface WhatsappMessage {
   createdAt: string;
 }
 
+// Normaliza o JSONB extra_fields (pode vir null/valor inesperado) em AgentExtraField[].
+function parseExtraFields(raw: unknown): AgentExtraField[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((f): f is Record<string, unknown> => typeof f === "object" && f !== null)
+    .map((f) => ({ label: String(f.label ?? ""), value: String(f.value ?? "") }));
+}
+
 export function mapAgent(row: AgentRow): WhatsappAgent {
   return {
     id: row.id,
@@ -71,6 +92,13 @@ export function mapAgent(row: AgentRow): WhatsappAgent {
     temperature: Number(row.temperature ?? 0.7),
     aiEnabled: row.ai_enabled,
     greeting: row.greeting ?? "",
+    responsibleName: row.responsible_name ?? "",
+    responsiblePhone: row.responsible_phone ?? "",
+    businessAddress: row.business_address ?? "",
+    profession: row.profession ?? "",
+    registrationNumber: row.registration_number ?? "",
+    extraFields: parseExtraFields(row.extra_fields),
+    responseDelaySeconds: Number(row.response_delay_seconds ?? 15),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

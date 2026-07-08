@@ -9,6 +9,7 @@ import {
   mapAgent,
   mapConversation,
   mapMessage,
+  type AgentExtraField,
   type WhatsappAgent,
   type WhatsappConversation,
   type WhatsappMessage,
@@ -29,7 +30,7 @@ export interface AgentWithClient {
 }
 
 const AGENT_COLS =
-  "id, client_id, instance_name, status, phone_number, system_prompt, niche, business_info, conversion_goal, model, temperature, ai_enabled, greeting, created_at, updated_at";
+  "id, client_id, instance_name, status, phone_number, system_prompt, niche, business_info, conversion_goal, model, temperature, ai_enabled, greeting, responsible_name, responsible_phone, business_address, profession, registration_number, extra_fields, response_delay_seconds, created_at, updated_at";
 
 // Lista todos os clientes com o agente (se existir) — a base dos cards.
 export async function fetchAgentsWithClients(): Promise<AgentWithClient[]> {
@@ -80,6 +81,13 @@ export interface UpdateAgentInput {
   temperature?: number;
   aiEnabled?: boolean;
   greeting?: string;
+  responsibleName?: string;
+  responsiblePhone?: string;
+  businessAddress?: string;
+  profession?: string;
+  registrationNumber?: string;
+  extraFields?: AgentExtraField[];
+  responseDelaySeconds?: number;
 }
 
 export async function updateAgent(id: string, patch: UpdateAgentInput): Promise<void> {
@@ -92,6 +100,15 @@ export async function updateAgent(id: string, patch: UpdateAgentInput): Promise<
   if (patch.temperature !== undefined) row.temperature = patch.temperature;
   if (patch.aiEnabled !== undefined) row.ai_enabled = patch.aiEnabled;
   if (patch.greeting !== undefined) row.greeting = patch.greeting;
+  if (patch.responsibleName !== undefined) row.responsible_name = patch.responsibleName;
+  if (patch.responsiblePhone !== undefined) row.responsible_phone = patch.responsiblePhone;
+  if (patch.businessAddress !== undefined) row.business_address = patch.businessAddress;
+  if (patch.profession !== undefined) row.profession = patch.profession;
+  if (patch.registrationNumber !== undefined) row.registration_number = patch.registrationNumber;
+  if (patch.extraFields !== undefined)
+    row.extra_fields = patch.extraFields as unknown as AgentUpdate["extra_fields"];
+  if (patch.responseDelaySeconds !== undefined)
+    row.response_delay_seconds = patch.responseDelaySeconds;
   const { error } = await supabase.from("whatsapp_agents").update(row).eq("id", id);
   if (error) throw error;
 }

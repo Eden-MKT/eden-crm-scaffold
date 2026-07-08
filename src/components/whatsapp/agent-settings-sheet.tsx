@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { updateAgent, whatsappKeys } from "@/lib/whatsapp/queries";
-import type { WhatsappAgent } from "@/lib/whatsapp/types";
+import type { AgentExtraField, WhatsappAgent } from "@/lib/whatsapp/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,13 +53,33 @@ export function AgentSettingsSheet({
     model: agent.model,
     temperature: agent.temperature,
     aiEnabled: agent.aiEnabled,
+    responsibleName: agent.responsibleName,
+    responsiblePhone: agent.responsiblePhone,
+    businessAddress: agent.businessAddress,
+    profession: agent.profession,
+    registrationNumber: agent.registrationNumber,
+    responseDelaySeconds: agent.responseDelaySeconds,
   });
+  const [extraFields, setExtraFields] = useState<AgentExtraField[]>(agent.extraFields);
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
 
+  const setExtra = (i: number, patch: Partial<AgentExtraField>) =>
+    setExtraFields((fs) => fs.map((f, idx) => (idx === i ? { ...f, ...patch } : f)));
+  const addExtra = () => setExtraFields((fs) => [...fs, { label: "", value: "" }]);
+  const removeExtra = (i: number) => setExtraFields((fs) => fs.filter((_, idx) => idx !== i));
+
   const mutation = useMutation({
-    mutationFn: () => updateAgent(agent.id, form),
+    mutationFn: () =>
+      updateAgent(agent.id, {
+        ...form,
+        responseDelaySeconds: Math.max(3, Math.round(form.responseDelaySeconds || 15)),
+        // Descarta linhas totalmente vazias e apara espaços.
+        extraFields: extraFields
+          .map((f) => ({ label: f.label.trim(), value: f.value.trim() }))
+          .filter((f) => f.label || f.value),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: whatsappKeys.agents() });
       toast.success("Configurações salvas.");
@@ -120,6 +141,103 @@ export function AgentSettingsSheet({
             />
           </Field>
 
+          {/* Dados estruturados do cliente — injetados no atendimento da IA. */}
+          <div className="space-y-3 rounded-lg border border-border p-3">
+            <div>
+              <p className="text-sm font-medium">Dados do cliente (usados pela IA)</p>
+              <p className="text-xs text-muted-foreground">
+                A IA usa esses dados no atendimento — ex.: informar quem entrará em contato. Deixe
+                em branco o que não se aplica.
+              </p>
+            </div>
+
+            <Field label="Responsável pelo atendimento (quem assume o lead)">
+              <Input
+                value={form.responsibleName}
+                onChange={(e) => set("responsibleName", e.target.value)}
+                placeholder="Ex.: Dra. Lívia Domingues"
+              />
+            </Field>
+
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Telefone do responsável">
+                <Input
+                  value={form.responsiblePhone}
+                  onChange={(e) => set("responsiblePhone", e.target.value)}
+                  placeholder="(62) 9 9999-9999"
+                />
+              </Field>
+              <Field label="Nº de registro (CRM/OAB/…)">
+                <Input
+                  value={form.registrationNumber}
+                  onChange={(e) => set("registrationNumber", e.target.value)}
+                  placeholder="Ex.: CRM-GO 12345"
+                />
+              </Field>
+            </div>
+
+            <Field label="Profissão / Especialidade">
+              <Input
+                value={form.profession}
+                onChange={(e) => set("profession", e.target.value)}
+                placeholder="Ex.: Médica dermatologista"
+              />
+            </Field>
+
+            <Field label="Endereço">
+              <Input
+                value={form.businessAddress}
+                onChange={(e) => set("businessAddress", e.target.value)}
+                placeholder="Ex.: Rua X, 123 — Goiânia/GO"
+              />
+            </Field>
+
+            {/* Campos livres — qualquer outro dado variável do cliente. */}
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Outros campos (opcional)</Label>
+              {extraFields.length === 0 && (
+                <p className="text-xs text-muted-foreground/70">
+                  Nenhum campo extra. Adicione qualquer outro dado que a IA deva conhecer.
+                </p>
+              )}
+              {extraFields.map((f, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input
+                    className="flex-[2]"
+                    value={f.label}
+                    onChange={(e) => setExtra(i, { label: e.target.value })}
+                    placeholder="Rótulo (ex.: Horário)"
+                  />
+                  <Input
+                    className="flex-[3]"
+                    value={f.value}
+                    onChange={(e) => setExtra(i, { value: e.target.value })}
+                    placeholder="Valor (ex.: Seg a Sex, 8h–18h)"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => removeExtra(i)}
+                    title="Remover campo"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={addExtra}
+              >
+                <Plus className="h-4 w-4" /> Adicionar campo
+              </Button>
+            </div>
+          </div>
+
           <Field label="Saudação inicial (opcional)">
             <Input
               value={form.greeting}
@@ -154,6 +272,20 @@ export function AgentSettingsSheet({
               />
             </Field>
           </div>
+
+          <Field label="Tempo de espera antes de responder (segundos)">
+            <Input
+              type="number"
+              min="3"
+              step="1"
+              value={form.responseDelaySeconds}
+              onChange={(e) => set("responseDelaySeconds", Number(e.target.value))}
+            />
+            <p className="text-xs text-muted-foreground">
+              Quanto a IA aguarda de silêncio antes de responder — evita responder no meio da
+              digitação. Padrão: 15s.
+            </p>
+          </Field>
 
           <Button
             className="w-full"

@@ -12,7 +12,7 @@ import {
   uploadMedia,
 } from "../_shared/media.ts";
 
-const DEBOUNCE_MS = 10000;
+const DEBOUNCE_MS = 15000; // fallback quando o agente não tem response_delay_seconds
 const HISTORY = 20;
 // Chance de cada mensagem da IA sair como "resposta/citar" à mensagem do cliente.
 const REPLY_QUOTE_PROBABILITY = 0.2;
@@ -37,14 +37,7 @@ const MARK_TOOL = {
   },
 };
 
-const TOPIC_VALUES = [
-  "Agendamento",
-  "Preço/Orçamento",
-  "Dúvida",
-  "Suporte",
-  "Reclamação",
-  "Outro",
-];
+const TOPIC_VALUES = ["Agendamento", "Preço/Orçamento", "Dúvida", "Suporte", "Reclamação", "Outro"];
 
 const CLASSIFY_TOOL = {
   type: "function",
@@ -170,14 +163,21 @@ async function extractMessage(
       try {
         const v = await describeImage(bytesToDataUrl(bytes, mime));
         desc = v.text;
-        await logUsage(db, agentId, conversationId, "vision", "gpt-4o-mini", v.promptTokens, v.completionTokens, chatCostUsd("gpt-4o-mini", v.promptTokens, v.completionTokens));
+        await logUsage(
+          db,
+          agentId,
+          conversationId,
+          "vision",
+          "gpt-4o-mini",
+          v.promptTokens,
+          v.completionTokens,
+          chatCostUsd("gpt-4o-mini", v.promptTokens, v.completionTokens),
+        );
       } catch (e) {
         console.error("vision error", e);
       }
     }
-    const content = [caption, desc ? `[imagem: ${desc}]` : "[imagem]"]
-      .filter(Boolean)
-      .join("\n");
+    const content = [caption, desc ? `[imagem: ${desc}]` : "[imagem]"].filter(Boolean).join("\n");
     return { type: "image", content, mediaBytes: bytes, mime };
   }
 
@@ -189,7 +189,16 @@ async function extractMessage(
       try {
         const t = await transcribe(bytes, mime);
         text = t.text;
-        await logUsage(db, agentId, conversationId, "transcription", "whisper-1", 0, 0, transcriptionCostUsd(t.seconds));
+        await logUsage(
+          db,
+          agentId,
+          conversationId,
+          "transcription",
+          "whisper-1",
+          0,
+          0,
+          transcriptionCostUsd(t.seconds),
+        );
       } catch (e) {
         console.error("whisper error", e);
       }
@@ -385,14 +394,48 @@ function buildSystemPrompt(
     agent.system_prompt ? String(agent.system_prompt) : "",
     agent.niche ? `Nicho do cliente: ${agent.niche}` : "",
     agent.business_info ? `Informações do negócio: ${agent.business_info}` : "",
-    agent.conversion_goal
-      ? `Objetivo do atendimento (conversão): ${agent.conversion_goal}`
-      : "",
+    buildClientDataBlock(agent),
+    agent.conversion_goal ? `Objetivo do atendimento (conversão): ${agent.conversion_goal}` : "",
     agent.greeting ? `Saudação de referência: ${agent.greeting}` : "",
     contactBlock,
     HUMANIZE_RULES,
   ];
   return parts.filter(Boolean).join("\n\n");
+}
+
+// Monta o bloco de dados estruturados do cliente (campos fixos + extra_fields).
+// Só entram os campos preenchidos; se nada estiver preenchido, retorna "".
+function buildClientDataBlock(agent: Record<string, unknown>): string {
+  const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const lines: string[] = [];
+  const push = (label: string, v: unknown) => {
+    const val = s(v);
+    if (val) lines.push(`- ${label}: ${val}`);
+  };
+  push("Responsável pelo atendimento", agent.responsible_name);
+  push("Telefone do responsável", agent.responsible_phone);
+  push("Profissão/Especialidade", agent.profession);
+  push("Registro (CRM/OAB/…)", agent.registration_number);
+  push("Endereço", agent.business_address);
+
+  const extra = agent.extra_fields;
+  if (Array.isArray(extra)) {
+    for (const f of extra) {
+      if (f && typeof f === "object") {
+        const label = s((f as Record<string, unknown>).label);
+        const value = s((f as Record<string, unknown>).value);
+        if (label && value) lines.push(`- ${label}: ${value}`);
+        else if (value) lines.push(`- ${value}`);
+      }
+    }
+  }
+
+  if (!lines.length) return "";
+  return (
+    "Dados do responsável e do negócio (use quando fizer sentido, ex.: informar quem entrará em contato). " +
+    "Use só o que estiver aqui — nunca invente valores, nomes ou endereços:\n" +
+    lines.join("\n")
+  );
 }
 
 async function runPipeline(
@@ -402,7 +445,10 @@ async function runPipeline(
   remoteJid: string,
   triggerMessageId: string,
 ) {
-  await new Promise((r) => setTimeout(r, DEBOUNCE_MS));
+  // Buffer configurável por agente (padrão 15s) — tempo de silêncio antes de responder.
+  const delaySec = Number(agent.response_delay_seconds);
+  const delayMs = Number.isFinite(delaySec) && delaySec >= 3 ? delaySec * 1000 : DEBOUNCE_MS;
+  await new Promise((r) => setTimeout(r, delayMs));
 
   // Claim atômico: só a invocação dona da última mensagem inbound responde.
   const { data: claimed } = await db.rpc("claim_ai_run", {
@@ -435,9 +481,7 @@ async function runPipeline(
     const messages: ChatMessage[] = [
       { role: "system", content: buildSystemPrompt(agent, contact) },
       ...ordered.map((m: { sender: string; content: string | null }) => ({
-        role: (m.sender === "contact" ? "user" : "assistant") as
-          | "user"
-          | "assistant",
+        role: (m.sender === "contact" ? "user" : "assistant") as "user" | "assistant",
         content: m.content ?? "",
       })),
     ];
@@ -450,7 +494,16 @@ async function runPipeline(
         temperature: Number(agent.temperature ?? 0.7),
         tools: [MARK_TOOL, CLASSIFY_TOOL],
       });
-      await logUsage(db, String(agent.id), conversationId, "chat", model, r.promptTokens, r.completionTokens, chatCostUsd(model, r.promptTokens, r.completionTokens));
+      await logUsage(
+        db,
+        String(agent.id),
+        conversationId,
+        "chat",
+        model,
+        r.promptTokens,
+        r.completionTokens,
+        chatCostUsd(model, r.promptTokens, r.completionTokens),
+      );
 
       if (r.toolCalls.length) {
         messages.push(r.assistant as ChatMessage);
