@@ -5,11 +5,18 @@ export interface PortalWindow {
 
 export interface PortalMetrics {
   agentConnected: boolean;
+  agendaEnabled: boolean;
   totals: {
     conversations: number;
     converted: number;
     conversionRate: number;
     messages: number;
+  };
+  appointments: {
+    total: number;
+    scheduled: number;
+    completed: number;
+    noShow: number;
   };
   windows: {
     day?: PortalWindow;

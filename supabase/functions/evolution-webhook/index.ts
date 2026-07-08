@@ -11,6 +11,17 @@ import {
   extractPdfText,
   uploadMedia,
 } from "../_shared/media.ts";
+import {
+  buildAgendaPrompt,
+  createAppointment,
+  freeSlots,
+  MEDICAL_PROMPT,
+  resolveService,
+  utcToZonedParts,
+  zonedToUtc,
+  type AgendaHours,
+  type AgentService,
+} from "../_shared/agenda.ts";
 
 const DEBOUNCE_MS = 15000; // fallback quando o agente não tem response_delay_seconds
 const HISTORY = 20;
@@ -51,6 +62,43 @@ const CLASSIFY_TOOL = {
         assunto: { type: "string", enum: TOPIC_VALUES },
       },
       required: ["assunto"],
+    },
+  },
+};
+
+// Tools de agenda — só incluídas quando o agente tem agenda_enabled.
+const AGENDA_VERIFICAR_TOOL = {
+  type: "function",
+  function: {
+    name: "verificar_disponibilidade",
+    description:
+      "Retorna os horários livres para uma data e tipo de atendimento. Use SEMPRE antes de oferecer horários; ofereça apenas os horários retornados.",
+    parameters: {
+      type: "object",
+      properties: {
+        data: { type: "string", description: "Data no formato AAAA-MM-DD" },
+        servico: { type: "string", description: "Tipo de atendimento (ex.: Consulta)" },
+      },
+      required: ["data"],
+    },
+  },
+};
+
+const AGENDA_MARCAR_TOOL = {
+  type: "function",
+  function: {
+    name: "agendar",
+    description:
+      "Cria o agendamento após confirmar data, hora, tipo e nome com o paciente. Só chame depois de verificar_disponibilidade e da confirmação do paciente.",
+    parameters: {
+      type: "object",
+      properties: {
+        data: { type: "string", description: "Data no formato AAAA-MM-DD" },
+        hora: { type: "string", description: "Hora no formato HH:MM (24h)" },
+        servico: { type: "string", description: "Tipo de atendimento" },
+        nome_paciente: { type: "string", description: "Nome do paciente" },
+      },
+      required: ["data", "hora"],
     },
   },
 };
@@ -390,11 +438,22 @@ function buildSystemPrompt(
     }; telefone = ${contact.phone ?? "desconhecido"}.` +
     ` Só use o nome se for um nome real de pessoa; se estiver "desconhecido", não invente nem use placeholder.`;
 
+  const agendaBlock =
+    agent.agenda_enabled === true
+      ? buildAgendaPrompt(
+          (agent.agenda_services as AgentService[]) ?? [],
+          agent.agenda_hours as AgendaHours,
+          String(agent.agenda_timezone ?? "America/Sao_Paulo"),
+        )
+      : "";
+
   const parts = [
     agent.system_prompt ? String(agent.system_prompt) : "",
     agent.niche ? `Nicho do cliente: ${agent.niche}` : "",
+    agent.is_medical === true ? MEDICAL_PROMPT : "",
     agent.business_info ? `Informações do negócio: ${agent.business_info}` : "",
     buildClientDataBlock(agent),
+    agendaBlock,
     agent.conversion_goal ? `Objetivo do atendimento (conversão): ${agent.conversion_goal}` : "",
     agent.greeting ? `Saudação de referência: ${agent.greeting}` : "",
     contactBlock,
@@ -436,6 +495,89 @@ function buildClientDataBlock(agent: Record<string, unknown>): string {
     "Use só o que estiver aqui — nunca invente valores, nomes ou endereços:\n" +
     lines.join("\n")
   );
+}
+
+// Tool verificar_disponibilidade: devolve horários livres reais para o modelo.
+async function handleVerificar(db: DB, agent: Record<string, unknown>, argsJson: string) {
+  let args: { data?: string; servico?: string } = {};
+  try {
+    args = JSON.parse(argsJson || "{}");
+  } catch {
+    /* ignora */
+  }
+  const tz = String(agent.agenda_timezone ?? "America/Sao_Paulo");
+  const services = (agent.agenda_services as AgentService[]) ?? [];
+  const hours = agent.agenda_hours as AgendaHours;
+  const service = resolveService(services, args.servico);
+  if (!args.data) return { erro: "Informe a data no formato AAAA-MM-DD." };
+  const slots = await freeSlots(db, {
+    clientId: String(agent.client_id),
+    dateISO: args.data,
+    durationMin: service.durationMin,
+    hours,
+    tz,
+  });
+  return {
+    data: args.data,
+    servico: service.label,
+    duracao_min: service.durationMin,
+    horarios_livres: slots,
+    ...(slots.length ? {} : { aviso: "Sem horários livres nesse dia; sugira outra data." }),
+  };
+}
+
+// Tool agendar: cria o appointment após rechecar disponibilidade.
+async function handleAgendar(
+  db: DB,
+  agent: Record<string, unknown>,
+  conversationId: string,
+  remoteJid: string,
+  argsJson: string,
+) {
+  let args: { data?: string; hora?: string; servico?: string; nome_paciente?: string } = {};
+  try {
+    args = JSON.parse(argsJson || "{}");
+  } catch {
+    /* ignora */
+  }
+  if (!args.data || !args.hora)
+    return { ok: false, erro: "Informe data (AAAA-MM-DD) e hora (HH:MM)." };
+  const tz = String(agent.agenda_timezone ?? "America/Sao_Paulo");
+  const services = (agent.agenda_services as AgentService[]) ?? [];
+  const hours = agent.agenda_hours as AgendaHours;
+  const service = resolveService(services, args.servico);
+  const startsAt = zonedToUtc(args.data, args.hora, tz);
+
+  const res = await createAppointment(db, {
+    clientId: String(agent.client_id),
+    agentId: String(agent.id),
+    conversationId,
+    startsAt,
+    durationMin: service.durationMin,
+    serviceLabel: service.label,
+    patientName: args.nome_paciente ?? null,
+    patientPhone: remoteJid.split("@")[0] || null,
+    source: "ai",
+  });
+
+  if (!res.ok) {
+    if (res.reason === "conflict") {
+      const slots = await freeSlots(db, {
+        clientId: String(agent.client_id),
+        dateISO: args.data,
+        durationMin: service.durationMin,
+        hours,
+        tz,
+      });
+      return { ok: false, motivo: "Horário indisponível.", horarios_livres: slots };
+    }
+    return { ok: false, motivo: "Não foi possível agendar agora." };
+  }
+  const local = utcToZonedParts(startsAt, tz);
+  return {
+    ok: true,
+    confirmado: { data: local.dateISO, hora: local.time, servico: service.label },
+  };
 }
 
 async function runPipeline(
@@ -486,13 +628,19 @@ async function runPipeline(
       })),
     ];
 
+    const agendaOn = agent.agenda_enabled === true;
+    const tools = agendaOn
+      ? [MARK_TOOL, CLASSIFY_TOOL, AGENDA_VERIFICAR_TOOL, AGENDA_MARCAR_TOOL]
+      : [MARK_TOOL, CLASSIFY_TOOL];
+
     let finalText: string | null = null;
-    for (let i = 0; i < 2; i++) {
+    // 4 iterações: permite verificar_disponibilidade -> agendar no mesmo turno.
+    for (let i = 0; i < 4; i++) {
       const r = await chat({
         model,
         messages,
         temperature: Number(agent.temperature ?? 0.7),
-        tools: [MARK_TOOL, CLASSIFY_TOOL],
+        tools,
       });
       await logUsage(
         db,
@@ -508,6 +656,7 @@ async function runPipeline(
       if (r.toolCalls.length) {
         messages.push(r.assistant as ChatMessage);
         for (const tc of r.toolCalls) {
+          let result: unknown = { ok: true };
           if (tc.name === "marcar_conversao") {
             await db
               .from("whatsapp_conversations")
@@ -524,11 +673,15 @@ async function runPipeline(
             } catch {
               /* ignora argumentos inválidos */
             }
+          } else if (tc.name === "verificar_disponibilidade" && agendaOn) {
+            result = await handleVerificar(db, agent, tc.arguments);
+          } else if (tc.name === "agendar" && agendaOn) {
+            result = await handleAgendar(db, agent, conversationId, remoteJid, tc.arguments);
           }
           messages.push({
             role: "tool",
             tool_call_id: tc.id,
-            content: JSON.stringify({ ok: true }),
+            content: JSON.stringify(result),
           });
         }
         continue;

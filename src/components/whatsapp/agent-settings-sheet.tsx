@@ -4,7 +4,14 @@ import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { updateAgent, whatsappKeys } from "@/lib/whatsapp/queries";
-import type { AgentExtraField, WhatsappAgent } from "@/lib/whatsapp/types";
+import {
+  DEFAULT_AGENDA_HOURS,
+  WEEKDAYS,
+  type AgendaHours,
+  type AgentExtraField,
+  type AgentService,
+  type WhatsappAgent,
+} from "@/lib/whatsapp/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,8 +66,12 @@ export function AgentSettingsSheet({
     profession: agent.profession,
     registrationNumber: agent.registrationNumber,
     responseDelaySeconds: agent.responseDelaySeconds,
+    isMedical: agent.isMedical,
+    agendaEnabled: agent.agendaEnabled,
   });
   const [extraFields, setExtraFields] = useState<AgentExtraField[]>(agent.extraFields);
+  const [services, setServices] = useState<AgentService[]>(agent.agendaServices);
+  const [hours, setHours] = useState<AgendaHours>(agent.agendaHours ?? DEFAULT_AGENDA_HOURS);
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -69,6 +80,16 @@ export function AgentSettingsSheet({
     setExtraFields((fs) => fs.map((f, idx) => (idx === i ? { ...f, ...patch } : f)));
   const addExtra = () => setExtraFields((fs) => [...fs, { label: "", value: "" }]);
   const removeExtra = (i: number) => setExtraFields((fs) => fs.filter((_, idx) => idx !== i));
+
+  const setService = (i: number, patch: Partial<AgentService>) =>
+    setServices((ss) => ss.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+  const addService = () => setServices((ss) => [...ss, { label: "", durationMin: 60 }]);
+  const removeService = (i: number) => setServices((ss) => ss.filter((_, idx) => idx !== i));
+
+  const setDay = (key: (typeof WEEKDAYS)[number]["key"], patch: Partial<AgendaHours["mon"]>) =>
+    setHours((h) => ({ ...h, [key]: { ...h[key], ...patch } }));
+  const setLunch = (patch: Partial<AgendaHours["lunch"]>) =>
+    setHours((h) => ({ ...h, lunch: { ...h.lunch, ...patch } }));
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -79,6 +100,13 @@ export function AgentSettingsSheet({
         extraFields: extraFields
           .map((f) => ({ label: f.label.trim(), value: f.value.trim() }))
           .filter((f) => f.label || f.value),
+        agendaServices: services
+          .map((s) => ({
+            label: s.label.trim(),
+            durationMin: Math.max(5, Number(s.durationMin) || 60),
+          }))
+          .filter((s) => s.label),
+        agendaHours: hours,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: whatsappKeys.agents() });
@@ -236,6 +264,146 @@ export function AgentSettingsSheet({
                 <Plus className="h-4 w-4" /> Adicionar campo
               </Button>
             </div>
+          </div>
+
+          {/* Agenda / nicho médico */}
+          <div className="space-y-3 rounded-lg border border-border p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Nicho médico</p>
+                <p className="text-xs text-muted-foreground">
+                  Ajusta o atendimento para pacientes (primeira vez/retorno, queixa, convênio).
+                </p>
+              </div>
+              <Switch checked={form.isMedical} onCheckedChange={(v) => set("isMedical", v)} />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Agenda ativa</p>
+                <p className="text-xs text-muted-foreground">
+                  A IA pode marcar consultas/procedimentos e conferir horários livres.
+                </p>
+              </div>
+              <Switch
+                checked={form.agendaEnabled}
+                onCheckedChange={(v) => set("agendaEnabled", v)}
+              />
+            </div>
+
+            {form.agendaEnabled && (
+              <div className="space-y-4 border-t border-border pt-3">
+                {/* Tipos de atendimento */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">
+                    Tipos de atendimento (nome + duração em minutos)
+                  </Label>
+                  {services.length === 0 && (
+                    <p className="text-xs text-muted-foreground/70">
+                      Ex.: Consulta 60min, Botox 30min, Preenchimento 120min.
+                    </p>
+                  )}
+                  {services.map((s, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Input
+                        className="flex-[3]"
+                        value={s.label}
+                        onChange={(e) => setService(i, { label: e.target.value })}
+                        placeholder="Ex.: Consulta"
+                      />
+                      <Input
+                        type="number"
+                        min="5"
+                        step="5"
+                        className="w-24"
+                        value={s.durationMin}
+                        onChange={(e) => setService(i, { durationMin: Number(e.target.value) })}
+                      />
+                      <span className="text-xs text-muted-foreground">min</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => removeService(i)}
+                        title="Remover tipo"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={addService}
+                  >
+                    <Plus className="h-4 w-4" /> Adicionar tipo
+                  </Button>
+                </div>
+
+                {/* Horário de atendimento */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Horário de atendimento</Label>
+                  {WEEKDAYS.map(({ key, label }) => {
+                    const d = hours[key];
+                    return (
+                      <div key={key} className="flex items-center gap-2">
+                        <Switch
+                          checked={d.open}
+                          onCheckedChange={(v) => setDay(key, { open: v })}
+                        />
+                        <span className="w-16 text-xs">{label}</span>
+                        {d.open ? (
+                          <>
+                            <Input
+                              type="time"
+                              className="w-28"
+                              value={d.start}
+                              onChange={(e) => setDay(key, { start: e.target.value })}
+                            />
+                            <span className="text-xs text-muted-foreground">às</span>
+                            <Input
+                              type="time"
+                              className="w-28"
+                              value={d.end}
+                              onChange={(e) => setDay(key, { end: e.target.value })}
+                            />
+                          </>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">fechado</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div className="flex items-center gap-2 pt-1">
+                    <Switch
+                      checked={hours.lunch.enabled}
+                      onCheckedChange={(v) => setLunch({ enabled: v })}
+                    />
+                    <span className="w-16 text-xs">Almoço</span>
+                    {hours.lunch.enabled && (
+                      <>
+                        <Input
+                          type="time"
+                          className="w-28"
+                          value={hours.lunch.start}
+                          onChange={(e) => setLunch({ start: e.target.value })}
+                        />
+                        <span className="text-xs text-muted-foreground">às</span>
+                        <Input
+                          type="time"
+                          className="w-28"
+                          value={hours.lunch.end}
+                          onChange={(e) => setLunch({ end: e.target.value })}
+                        />
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <Field label="Saudação inicial (opcional)">

@@ -15,6 +15,49 @@ export interface AgentExtraField {
   value: string;
 }
 
+// Config de agenda (clientes médicos): tipos de atendimento + horários de trabalho.
+export interface AgentService {
+  label: string;
+  durationMin: number;
+}
+export interface AgendaDay {
+  open: boolean;
+  start: string; // "HH:MM"
+  end: string;
+}
+export type WeekdayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+export interface AgendaHours {
+  mon: AgendaDay;
+  tue: AgendaDay;
+  wed: AgendaDay;
+  thu: AgendaDay;
+  fri: AgendaDay;
+  sat: AgendaDay;
+  sun: AgendaDay;
+  lunch: { enabled: boolean; start: string; end: string };
+}
+
+export const WEEKDAYS: { key: WeekdayKey; label: string }[] = [
+  { key: "mon", label: "Segunda" },
+  { key: "tue", label: "Terça" },
+  { key: "wed", label: "Quarta" },
+  { key: "thu", label: "Quinta" },
+  { key: "fri", label: "Sexta" },
+  { key: "sat", label: "Sábado" },
+  { key: "sun", label: "Domingo" },
+];
+
+export const DEFAULT_AGENDA_HOURS: AgendaHours = {
+  mon: { open: true, start: "08:00", end: "18:00" },
+  tue: { open: true, start: "08:00", end: "18:00" },
+  wed: { open: true, start: "08:00", end: "18:00" },
+  thu: { open: true, start: "08:00", end: "18:00" },
+  fri: { open: true, start: "08:00", end: "18:00" },
+  sat: { open: false, start: "08:00", end: "12:00" },
+  sun: { open: false, start: "08:00", end: "12:00" },
+  lunch: { enabled: true, start: "12:00", end: "13:00" },
+};
+
 export interface WhatsappAgent {
   id: string;
   clientId: string;
@@ -36,6 +79,11 @@ export interface WhatsappAgent {
   registrationNumber: string;
   extraFields: AgentExtraField[];
   responseDelaySeconds: number;
+  isMedical: boolean;
+  agendaEnabled: boolean;
+  agendaTimezone: string;
+  agendaHours: AgendaHours;
+  agendaServices: AgentService[];
   createdAt: string;
   updatedAt: string;
 }
@@ -77,6 +125,21 @@ function parseExtraFields(raw: unknown): AgentExtraField[] {
     .map((f) => ({ label: String(f.label ?? ""), value: String(f.value ?? "") }));
 }
 
+function parseServices(raw: unknown): AgentService[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((s): s is Record<string, unknown> => typeof s === "object" && s !== null)
+    .map((s) => ({ label: String(s.label ?? ""), durationMin: Number(s.durationMin ?? 60) || 60 }))
+    .filter((s) => s.label);
+}
+
+function parseHours(raw: unknown): AgendaHours {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    return { ...DEFAULT_AGENDA_HOURS, ...(raw as Partial<AgendaHours>) } as AgendaHours;
+  }
+  return DEFAULT_AGENDA_HOURS;
+}
+
 export function mapAgent(row: AgentRow): WhatsappAgent {
   return {
     id: row.id,
@@ -99,6 +162,11 @@ export function mapAgent(row: AgentRow): WhatsappAgent {
     registrationNumber: row.registration_number ?? "",
     extraFields: parseExtraFields(row.extra_fields),
     responseDelaySeconds: Number(row.response_delay_seconds ?? 15),
+    isMedical: row.is_medical ?? false,
+    agendaEnabled: row.agenda_enabled ?? false,
+    agendaTimezone: row.agenda_timezone ?? "America/Sao_Paulo",
+    agendaHours: parseHours(row.agenda_hours),
+    agendaServices: parseServices(row.agenda_services),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

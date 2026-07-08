@@ -1,14 +1,15 @@
-import { Bot, LayoutDashboard, Users, Wallet, type LucideIcon } from "lucide-react";
+import { Bot, Calendar, LayoutDashboard, Users, Wallet, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   title: string;
-  url: "/" | "/clientes" | "/financeiro" | "/ia-whatsapp";
+  url: "/" | "/clientes" | "/agenda" | "/financeiro" | "/ia-whatsapp";
   icon: LucideIcon;
 }
 
 export const MAIN_NAV: NavItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Clientes", url: "/clientes", icon: Users },
+  { title: "Agenda", url: "/agenda", icon: Calendar },
   { title: "IA WhatsApp", url: "/ia-whatsapp", icon: Bot },
   { title: "Financeiro", url: "/financeiro", icon: Wallet },
 ];

@@ -10,6 +10,8 @@ import {
   mapConversation,
   mapMessage,
   type AgentExtraField,
+  type AgentService,
+  type AgendaHours,
   type WhatsappAgent,
   type WhatsappConversation,
   type WhatsappMessage,
@@ -30,7 +32,7 @@ export interface AgentWithClient {
 }
 
 const AGENT_COLS =
-  "id, client_id, instance_name, status, phone_number, system_prompt, niche, business_info, conversion_goal, model, temperature, ai_enabled, greeting, responsible_name, responsible_phone, business_address, profession, registration_number, extra_fields, response_delay_seconds, created_at, updated_at";
+  "id, client_id, instance_name, status, phone_number, system_prompt, niche, business_info, conversion_goal, model, temperature, ai_enabled, greeting, responsible_name, responsible_phone, business_address, profession, registration_number, extra_fields, response_delay_seconds, is_medical, agenda_enabled, agenda_timezone, agenda_hours, agenda_services, created_at, updated_at";
 
 // Lista todos os clientes com o agente (se existir) — a base dos cards.
 export async function fetchAgentsWithClients(): Promise<AgentWithClient[]> {
@@ -88,6 +90,11 @@ export interface UpdateAgentInput {
   registrationNumber?: string;
   extraFields?: AgentExtraField[];
   responseDelaySeconds?: number;
+  isMedical?: boolean;
+  agendaEnabled?: boolean;
+  agendaTimezone?: string;
+  agendaHours?: AgendaHours;
+  agendaServices?: AgentService[];
 }
 
 export async function updateAgent(id: string, patch: UpdateAgentInput): Promise<void> {
@@ -109,6 +116,13 @@ export async function updateAgent(id: string, patch: UpdateAgentInput): Promise<
     row.extra_fields = patch.extraFields as unknown as AgentUpdate["extra_fields"];
   if (patch.responseDelaySeconds !== undefined)
     row.response_delay_seconds = patch.responseDelaySeconds;
+  if (patch.isMedical !== undefined) row.is_medical = patch.isMedical;
+  if (patch.agendaEnabled !== undefined) row.agenda_enabled = patch.agendaEnabled;
+  if (patch.agendaTimezone !== undefined) row.agenda_timezone = patch.agendaTimezone;
+  if (patch.agendaHours !== undefined)
+    row.agenda_hours = patch.agendaHours as unknown as AgentUpdate["agenda_hours"];
+  if (patch.agendaServices !== undefined)
+    row.agenda_services = patch.agendaServices as unknown as AgentUpdate["agenda_services"];
   const { error } = await supabase.from("whatsapp_agents").update(row).eq("id", id);
   if (error) throw error;
 }

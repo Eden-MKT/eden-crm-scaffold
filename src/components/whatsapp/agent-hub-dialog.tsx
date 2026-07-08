@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { LayoutDashboard, MessageCircle, Settings, Plug } from "lucide-react";
+import { Calendar, LayoutDashboard, MessageCircle, Settings, Plug } from "lucide-react";
 
 import { ensureAgent, whatsappKeys } from "@/lib/whatsapp/queries";
 import type { AgentWithClient } from "@/lib/whatsapp/queries";
@@ -17,6 +17,7 @@ import { AgentSettingsSheet } from "./agent-settings-sheet";
 import { ConnectionPanel } from "./connection-panel";
 import { ChatDialog } from "./chat-dialog";
 import { ClientPortalPanel } from "./client-portal-panel";
+import { AgentAgendaPanel } from "./agent-agenda-panel";
 
 interface AgentHubDialogProps {
   item: AgentWithClient;
@@ -25,7 +26,9 @@ interface AgentHubDialogProps {
 }
 
 export function AgentHubDialog({ item, open, onOpenChange }: AgentHubDialogProps) {
-  const [sub, setSub] = useState<"settings" | "chat" | "connection" | "portal" | null>(null);
+  const [sub, setSub] = useState<"settings" | "chat" | "connection" | "portal" | "agenda" | null>(
+    null,
+  );
 
   // Garante o agente (cria on-demand) ao abrir o hub.
   const { data: agent, isLoading } = useQuery({
@@ -86,6 +89,16 @@ export function AgentHubDialog({ item, open, onOpenChange }: AgentHubDialogProps
                   <LayoutDashboard className="h-4 w-4" />
                   Painel do cliente
                 </Button>
+                {agent.agendaEnabled && (
+                  <Button
+                    variant="outline"
+                    className="col-span-2 gap-2"
+                    onClick={() => setSub("agenda")}
+                  >
+                    <Calendar className="h-4 w-4" />
+                    Agenda de atendimentos
+                  </Button>
+                )}
               </div>
             </div>
           )}
@@ -118,6 +131,12 @@ export function AgentHubDialog({ item, open, onOpenChange }: AgentHubDialogProps
             clientEmail={item.client.email}
             open={sub === "portal"}
             onOpenChange={(o) => setSub(o ? "portal" : null)}
+          />
+          <AgentAgendaPanel
+            agent={agent}
+            clientName={item.client.name}
+            open={sub === "agenda"}
+            onOpenChange={(o) => setSub(o ? "agenda" : null)}
           />
         </>
       )}

@@ -10,7 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import { useReducedMotion } from "motion/react";
-import { MessageSquare, Target, TrendingUp, Users } from "lucide-react";
+import { CalendarCheck, CalendarX, Target, TrendingUp, Users } from "lucide-react";
 
 import { fetchPortalMetrics, portalKeys } from "@/lib/portal/queries";
 import { useChartTheme } from "@/lib/charts/use-chart-theme";
@@ -57,13 +57,7 @@ export function PortalDashboard() {
 
   const cards = [
     {
-      title: "Atendimentos (30d)",
-      value: m?.windows.month?.atendimentos ?? 0,
-      accent: "#3AA0FF",
-      icon: <MessageSquare className="h-4 w-4" />,
-    },
-    {
-      title: "Leads (30d)",
+      title: "Novos contatos (30d)",
       value: m?.windows.month?.leads ?? 0,
       accent: "#1F4FD6",
       icon: <Users className="h-4 w-4" />,
@@ -74,12 +68,30 @@ export function PortalDashboard() {
       accent: "#2FB67C",
       icon: <Target className="h-4 w-4" />,
     },
-    {
-      title: "Conversas totais",
-      value: m?.totals.conversations ?? 0,
-      accent: "#E0A52F",
-      icon: <TrendingUp className="h-4 w-4" />,
-    },
+    // Com agenda: agendamentos + não comparecimentos. Sem agenda: conversas totais.
+    ...(m?.agendaEnabled
+      ? [
+          {
+            title: "Agendamentos",
+            value: m?.appointments?.total ?? 0,
+            accent: "#3AA0FF",
+            icon: <CalendarCheck className="h-4 w-4" />,
+          },
+          {
+            title: "Não comparecimentos",
+            value: m?.appointments?.noShow ?? 0,
+            accent: "#E04F4F",
+            icon: <CalendarX className="h-4 w-4" />,
+          },
+        ]
+      : [
+          {
+            title: "Conversas totais",
+            value: m?.totals.conversations ?? 0,
+            accent: "#E0A52F",
+            icon: <TrendingUp className="h-4 w-4" />,
+          },
+        ]),
   ];
 
   return (

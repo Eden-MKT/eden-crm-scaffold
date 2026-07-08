@@ -1,17 +1,19 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, LogOut, MessagesSquare } from "lucide-react";
+import { BarChart3, Calendar, LogOut, MessagesSquare } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
 import { fetchPortalMetrics, portalKeys } from "@/lib/portal/queries";
+import { fetchPortalAgenda, portalAgendaKeys } from "@/lib/portal/agenda";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { BottomTabBar } from "@/components/layout/bottom-tab-bar";
+import { BottomTabBar, type BottomTabItem } from "@/components/layout/bottom-tab-bar";
 import { PortalDashboard } from "./portal-dashboard";
 import { PortalChat } from "./portal-chat";
+import { PortalAgenda } from "./portal-agenda";
 
-type View = "metrics" | "chat";
+type View = "metrics" | "chat" | "agenda";
 
 export function PortalHome() {
   const { signOut } = useAuth();
@@ -23,6 +25,41 @@ export function PortalHome() {
     queryFn: fetchPortalMetrics,
   });
   const clientName = data?.client?.name ?? "Seu negócio";
+
+  // Só mostra a aba Agenda quando o atendimento tem agenda ativa (mesma query da aba).
+  const { data: agenda } = useQuery({
+    queryKey: portalAgendaKeys.list(),
+    queryFn: fetchPortalAgenda,
+  });
+  const agendaEnabled = agenda?.agendaEnabled === true;
+
+  const tabItems: BottomTabItem[] = [
+    {
+      key: "metrics",
+      title: "Métricas",
+      icon: BarChart3,
+      active: view === "metrics",
+      onSelect: () => setView("metrics"),
+    },
+    {
+      key: "chat",
+      title: "Histórico",
+      icon: MessagesSquare,
+      active: view === "chat",
+      onSelect: () => setView("chat"),
+    },
+    ...(agendaEnabled
+      ? [
+          {
+            key: "agenda",
+            title: "Agenda",
+            icon: Calendar,
+            active: view === "agenda",
+            onSelect: () => setView("agenda"),
+          } satisfies BottomTabItem,
+        ]
+      : []),
+  ];
 
   return (
     <div className="app-bg flex h-[100dvh] flex-col">
@@ -48,6 +85,14 @@ export function PortalHome() {
               icon={<MessagesSquare className="h-4 w-4" />}
               label="Histórico"
             />
+            {agendaEnabled && (
+              <ToggleBtn
+                active={view === "agenda"}
+                onClick={() => setView("agenda")}
+                icon={<Calendar className="h-4 w-4" />}
+                label="Agenda"
+              />
+            )}
           </div>
           <ThemeToggle />
           <Button variant="ghost" size="icon" onClick={() => void signOut()} title="Sair">
@@ -57,30 +102,13 @@ export function PortalHome() {
       </header>
 
       <div className="min-h-0 flex-1">
-        {view === "metrics" ? <PortalDashboard /> : <PortalChat />}
+        {view === "metrics" && <PortalDashboard />}
+        {view === "chat" && <PortalChat />}
+        {view === "agenda" && <PortalAgenda />}
       </div>
 
       {/* Tab bar inferior estilo iOS — só mobile. */}
-      <BottomTabBar
-        floating={false}
-        className="md:hidden"
-        items={[
-          {
-            key: "metrics",
-            title: "Métricas",
-            icon: BarChart3,
-            active: view === "metrics",
-            onSelect: () => setView("metrics"),
-          },
-          {
-            key: "chat",
-            title: "Histórico",
-            icon: MessagesSquare,
-            active: view === "chat",
-            onSelect: () => setView("chat"),
-          },
-        ]}
-      />
+      <BottomTabBar floating={false} className="md:hidden" items={tabItems} />
     </div>
   );
 }

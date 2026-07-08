@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Repeat, UserPlus, Users, Wallet } from "lucide-react";
 
 import { PendingTasksSection } from "@/components/dashboard/pending-tasks-section";
+import { UpcomingEventsSection } from "@/components/dashboard/upcoming-events-section";
 import { Stagger, StaggerItem } from "@/components/ui/fade-in";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
@@ -107,6 +108,8 @@ function DashboardPage() {
           </StaggerItem>
         ))}
       </Stagger>
+
+      <UpcomingEventsSection />
     </div>
   );
 }

@@ -51,6 +51,119 @@ export interface Database {
         };
         Relationships: [];
       };
+      agenda_events: {
+        Row: {
+          id: string;
+          title: string;
+          type: string;
+          starts_at: string;
+          ends_at: string;
+          client_id: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          type?: string;
+          starts_at: string;
+          ends_at: string;
+          client_id?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          type?: string;
+          starts_at?: string;
+          ends_at?: string;
+          client_id?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "agenda_events_client_id_fkey";
+            columns: ["client_id"];
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      appointments: {
+        Row: {
+          id: string;
+          client_id: string;
+          agent_id: string | null;
+          conversation_id: string | null;
+          patient_name: string | null;
+          patient_phone: string | null;
+          service_label: string | null;
+          duration_min: number;
+          starts_at: string;
+          ends_at: string;
+          status: string;
+          source: string;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          agent_id?: string | null;
+          conversation_id?: string | null;
+          patient_name?: string | null;
+          patient_phone?: string | null;
+          service_label?: string | null;
+          duration_min?: number;
+          starts_at: string;
+          ends_at: string;
+          status?: string;
+          source?: string;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          agent_id?: string | null;
+          conversation_id?: string | null;
+          patient_name?: string | null;
+          patient_phone?: string | null;
+          service_label?: string | null;
+          duration_min?: number;
+          starts_at?: string;
+          ends_at?: string;
+          status?: string;
+          source?: string;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "appointments_client_id_fkey";
+            columns: ["client_id"];
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "appointments_agent_id_fkey";
+            columns: ["agent_id"];
+            referencedRelation: "whatsapp_agents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "appointments_conversation_id_fkey";
+            columns: ["conversation_id"];
+            referencedRelation: "whatsapp_conversations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       finance_entries: {
         Row: {
           id: string;
@@ -242,6 +355,11 @@ export interface Database {
           registration_number: string | null;
           extra_fields: Json;
           response_delay_seconds: number;
+          is_medical: boolean;
+          agenda_enabled: boolean;
+          agenda_timezone: string;
+          agenda_hours: Json;
+          agenda_services: Json;
           created_at: string;
           updated_at: string;
         };
@@ -266,6 +384,11 @@ export interface Database {
           registration_number?: string | null;
           extra_fields?: Json;
           response_delay_seconds?: number;
+          is_medical?: boolean;
+          agenda_enabled?: boolean;
+          agenda_timezone?: string;
+          agenda_hours?: Json;
+          agenda_services?: Json;
           created_at?: string;
           updated_at?: string;
         };
@@ -290,6 +413,11 @@ export interface Database {
           registration_number?: string | null;
           extra_fields?: Json;
           response_delay_seconds?: number;
+          is_medical?: boolean;
+          agenda_enabled?: boolean;
+          agenda_timezone?: string;
+          agenda_hours?: Json;
+          agenda_services?: Json;
           created_at?: string;
           updated_at?: string;
         };
