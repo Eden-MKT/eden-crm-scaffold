@@ -37,6 +37,7 @@ const FUNCTIONS = [
   "portal-chat",
   "portal-agenda",
   "improve-prompt",
+  "simulate-turn",
 ];
 
 const sharedDir = join(FUNCTIONS_DIR, "_shared");

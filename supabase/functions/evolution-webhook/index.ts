@@ -3,7 +3,7 @@ import { json, preflight } from "../_shared/cors.ts";
 import * as evo from "../_shared/evolution.ts";
 import { chat, describeImage, transcribe, type ChatMessage } from "../_shared/openai.ts";
 import { chatCostUsd, transcriptionCostUsd } from "../_shared/pricing.ts";
-import { HUMANIZE_RULES, NO_REPLY, splitBubbles, typingDelay } from "../_shared/humanize.ts";
+import { NO_REPLY, splitBubbles, typingDelay } from "../_shared/humanize.ts";
 import {
   base64ToBytes,
   bytesToDataUrl,
@@ -12,17 +12,15 @@ import {
   uploadMedia,
 } from "../_shared/media.ts";
 import {
-  buildAgendaPrompt,
   createAppointment,
   freeSlots,
-  MEDICAL_PROMPT,
   resolveService,
   utcToZonedParts,
   zonedToUtc,
   type AgendaHours,
   type AgentService,
 } from "../_shared/agenda.ts";
-import { buildInjectionLayer } from "../_shared/best-practices.ts";
+import { buildSystemPrompt, handleVerificar, toolsForAgent } from "../_shared/ai-core.ts";
 
 const DEBOUNCE_MS = 15000; // fallback quando o agente não tem response_delay_seconds
 const HISTORY = 20;
@@ -38,71 +36,6 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 // deno-lint-ignore no-explicit-any
 type DB = any;
-
-const MARK_TOOL = {
-  type: "function",
-  function: {
-    name: "marcar_conversao",
-    description:
-      "Marque a conversa como convertida quando o objetivo do atendimento for atingido (ex.: agendou, fechou compra, pediu orçamento — conforme o objetivo do agente).",
-    parameters: { type: "object", properties: {}, required: [] },
-  },
-};
-
-const TOPIC_VALUES = ["Agendamento", "Preço/Orçamento", "Dúvida", "Suporte", "Reclamação", "Outro"];
-
-const CLASSIFY_TOOL = {
-  type: "function",
-  function: {
-    name: "classificar_assunto",
-    description:
-      "Classifique o ASSUNTO PRINCIPAL desta conversa em uma categoria. Chame sempre a cada resposta, atualizando se o assunto mudar.",
-    parameters: {
-      type: "object",
-      properties: {
-        assunto: { type: "string", enum: TOPIC_VALUES },
-      },
-      required: ["assunto"],
-    },
-  },
-};
-
-// Tools de agenda — só incluídas quando o agente tem agenda_enabled.
-const AGENDA_VERIFICAR_TOOL = {
-  type: "function",
-  function: {
-    name: "verificar_disponibilidade",
-    description:
-      "Retorna os horários livres para uma data e tipo de atendimento. Use SEMPRE antes de oferecer horários; ofereça apenas os horários retornados.",
-    parameters: {
-      type: "object",
-      properties: {
-        data: { type: "string", description: "Data no formato AAAA-MM-DD" },
-        servico: { type: "string", description: "Tipo de atendimento (ex.: Consulta)" },
-      },
-      required: ["data"],
-    },
-  },
-};
-
-const AGENDA_MARCAR_TOOL = {
-  type: "function",
-  function: {
-    name: "agendar",
-    description:
-      "Cria o agendamento após confirmar data, hora, tipo e nome com o paciente. Só chame depois de verificar_disponibilidade e da confirmação do paciente.",
-    parameters: {
-      type: "object",
-      properties: {
-        data: { type: "string", description: "Data no formato AAAA-MM-DD" },
-        hora: { type: "string", description: "Hora no formato HH:MM (24h)" },
-        servico: { type: "string", description: "Tipo de atendimento" },
-        nome_paciente: { type: "string", description: "Nome do paciente" },
-      },
-      required: ["data", "hora"],
-    },
-  },
-};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return preflight();
@@ -429,105 +362,6 @@ async function getOrCreateConversation(
   return created;
 }
 
-function buildSystemPrompt(
-  agent: Record<string, unknown>,
-  contact: { name: string | null; phone: string | null },
-): string {
-  const contactBlock =
-    `Dados do contato (vindos do WhatsApp): nome = ${
-      contact.name && contact.name.trim() ? contact.name.trim() : "desconhecido"
-    }; telefone = ${contact.phone ?? "desconhecido"}.` +
-    ` Só use o nome se for um nome real de pessoa; se estiver "desconhecido", não invente nem use placeholder.`;
-
-  const agendaBlock =
-    agent.agenda_enabled === true
-      ? buildAgendaPrompt(
-          (agent.agenda_services as AgentService[]) ?? [],
-          agent.agenda_hours as AgendaHours,
-          String(agent.agenda_timezone ?? "America/Sao_Paulo"),
-        )
-      : "";
-
-  const parts = [
-    agent.system_prompt ? String(agent.system_prompt) : "",
-    agent.niche ? `Nicho do cliente: ${agent.niche}` : "",
-    agent.prompt_injection_enabled !== false ? buildInjectionLayer(agent) : "",
-    agent.is_medical === true ? MEDICAL_PROMPT : "",
-    agent.business_info ? `Informações do negócio: ${agent.business_info}` : "",
-    buildClientDataBlock(agent),
-    agendaBlock,
-    agent.conversion_goal ? `Objetivo do atendimento (conversão): ${agent.conversion_goal}` : "",
-    agent.greeting ? `Saudação de referência: ${agent.greeting}` : "",
-    contactBlock,
-    HUMANIZE_RULES,
-  ];
-  return parts.filter(Boolean).join("\n\n");
-}
-
-// Monta o bloco de dados estruturados do cliente (campos fixos + extra_fields).
-// Só entram os campos preenchidos; se nada estiver preenchido, retorna "".
-function buildClientDataBlock(agent: Record<string, unknown>): string {
-  const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
-  const lines: string[] = [];
-  const push = (label: string, v: unknown) => {
-    const val = s(v);
-    if (val) lines.push(`- ${label}: ${val}`);
-  };
-  push("Responsável pelo atendimento", agent.responsible_name);
-  push("Telefone do responsável", agent.responsible_phone);
-  push("Profissão/Especialidade", agent.profession);
-  push("Registro (CRM/OAB/…)", agent.registration_number);
-  push("Endereço", agent.business_address);
-
-  const extra = agent.extra_fields;
-  if (Array.isArray(extra)) {
-    for (const f of extra) {
-      if (f && typeof f === "object") {
-        const label = s((f as Record<string, unknown>).label);
-        const value = s((f as Record<string, unknown>).value);
-        if (label && value) lines.push(`- ${label}: ${value}`);
-        else if (value) lines.push(`- ${value}`);
-      }
-    }
-  }
-
-  if (!lines.length) return "";
-  return (
-    "Dados do responsável e do negócio (use quando fizer sentido, ex.: informar quem entrará em contato). " +
-    "Use só o que estiver aqui — nunca invente valores, nomes ou endereços:\n" +
-    lines.join("\n")
-  );
-}
-
-// Tool verificar_disponibilidade: devolve horários livres reais para o modelo.
-async function handleVerificar(db: DB, agent: Record<string, unknown>, argsJson: string) {
-  let args: { data?: string; servico?: string } = {};
-  try {
-    args = JSON.parse(argsJson || "{}");
-  } catch {
-    /* ignora */
-  }
-  const tz = String(agent.agenda_timezone ?? "America/Sao_Paulo");
-  const services = (agent.agenda_services as AgentService[]) ?? [];
-  const hours = agent.agenda_hours as AgendaHours;
-  const service = resolveService(services, args.servico);
-  if (!args.data) return { erro: "Informe a data no formato AAAA-MM-DD." };
-  const slots = await freeSlots(db, {
-    clientId: String(agent.client_id),
-    dateISO: args.data,
-    durationMin: service.durationMin,
-    hours,
-    tz,
-  });
-  return {
-    data: args.data,
-    servico: service.label,
-    duracao_min: service.durationMin,
-    horarios_livres: slots,
-    ...(slots.length ? {} : { aviso: "Sem horários livres nesse dia; sugira outra data." }),
-  };
-}
-
 // Tool agendar: cria o appointment após rechecar disponibilidade.
 async function handleAgendar(
   db: DB,
@@ -631,9 +465,7 @@ async function runPipeline(
     ];
 
     const agendaOn = agent.agenda_enabled === true;
-    const tools = agendaOn
-      ? [MARK_TOOL, CLASSIFY_TOOL, AGENDA_VERIFICAR_TOOL, AGENDA_MARCAR_TOOL]
-      : [MARK_TOOL, CLASSIFY_TOOL];
+    const tools = toolsForAgent(agent);
 
     let finalText: string | null = null;
     // 4 iterações: permite verificar_disponibilidade -> agendar no mesmo turno.
