@@ -72,13 +72,13 @@ export function PortalDashboard() {
     ...(m?.agendaEnabled
       ? [
           {
-            title: "Agendamentos",
+            title: "Agendamentos (mês)",
             value: m?.appointments?.total ?? 0,
             accent: "#3AA0FF",
             icon: <CalendarCheck className="h-4 w-4" />,
           },
           {
-            title: "Não comparecimentos",
+            title: "Não comparecimentos (mês)",
             value: m?.appointments?.noShow ?? 0,
             accent: "#E04F4F",
             icon: <CalendarX className="h-4 w-4" />,

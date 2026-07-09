@@ -32,7 +32,9 @@ export interface PortalService {
 }
 
 export const portalAgendaKeys = {
-  list: () => ["portal", "agenda", "list"] as const,
+  all: ["portal", "agenda"] as const,
+  list: (fromISO?: string, toISO?: string) =>
+    ["portal", "agenda", "list", fromISO ?? "", toISO ?? ""] as const,
 };
 
 export interface PortalAgendaResult {
@@ -41,9 +43,16 @@ export interface PortalAgendaResult {
   services: PortalService[];
 }
 
-export async function fetchPortalAgenda(): Promise<PortalAgendaResult> {
+export async function fetchPortalAgenda(
+  fromISO?: string,
+  toISO?: string,
+): Promise<PortalAgendaResult> {
   const { data, error } = await supabase.functions.invoke("portal-agenda", {
-    body: { action: "list" },
+    body: {
+      action: "list",
+      ...(fromISO ? { from: fromISO } : {}),
+      ...(toISO ? { to: toISO } : {}),
+    },
   });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
@@ -77,6 +86,24 @@ export interface PortalCreateApptInput {
 export async function createPortalAppointment(input: PortalCreateApptInput): Promise<void> {
   const { data, error } = await supabase.functions.invoke("portal-agenda", {
     body: { action: "create", ...input },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+}
+
+export interface PortalUpdateApptInput {
+  appointmentId: string;
+  patientName?: string;
+  patientPhone?: string;
+  serviceLabel?: string;
+  startsAt?: string; // ISO
+  durationMin?: number;
+}
+
+// Edita um agendamento (portal). A edge checa dono e conflito de horário (409).
+export async function updatePortalAppointment(input: PortalUpdateApptInput): Promise<void> {
+  const { data, error } = await supabase.functions.invoke("portal-agenda", {
+    body: { action: "update", ...input },
   });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);

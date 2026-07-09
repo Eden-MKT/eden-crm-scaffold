@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarPlus, Check, Clock, Bot, RotateCcw, User, UserX, X } from "lucide-react";
+import { CalendarPlus, Check, Clock, Bot, Pencil, RotateCcw, User, UserX, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -11,10 +11,12 @@ import {
   createStaffAppointment,
   fetchClientAppointments,
   setAppointmentStatus,
+  updateStaffAppointment,
   type Appointment,
 } from "@/lib/agenda/appointments";
 import type { WhatsappAgent } from "@/lib/whatsapp/types";
 import { cn } from "@/lib/utils";
+import { defaultPeriod, PeriodFilter } from "@/components/agenda/period-filter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,16 +53,37 @@ export function AgentAgendaPanel({ agent, clientName, open, onOpenChange }: Agen
   const services = agent.agendaServices;
 
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [patient, setPatient] = useState("");
   const [phone, setPhone] = useState("");
   const [service, setService] = useState(services[0]?.label ?? "");
   const [start, setStart] = useState("");
+  const [period, setPeriod] = useState(defaultPeriod);
 
+  const fromISO = period.from.toISOString();
+  const toISO = period.to.toISOString();
   const { data: appts } = useQuery({
-    queryKey: appointmentKeys.byClient(agent.clientId),
-    queryFn: () => fetchClientAppointments(agent.clientId),
+    queryKey: appointmentKeys.byClient(agent.clientId, fromISO, toISO),
+    queryFn: () => fetchClientAppointments(agent.clientId, fromISO, toISO),
     enabled: open,
   });
+
+  const resetForm = () => {
+    setEditingId(null);
+    setPatient("");
+    setPhone("");
+    setService(services[0]?.label ?? "");
+    setStart("");
+  };
+
+  const openEdit = (a: Appointment) => {
+    setEditingId(a.id);
+    setPatient(a.patientName ?? "");
+    setPhone(a.patientPhone ?? "");
+    setService(a.serviceLabel ?? services[0]?.label ?? "");
+    setStart(format(new Date(a.startsAt), "yyyy-MM-dd'T'HH:mm"));
+    setShowForm(true);
+  };
 
   const grouped = useMemo(() => {
     const map = new Map<string, Appointment[]>();
@@ -71,12 +94,22 @@ export function AgentAgendaPanel({ agent, clientName, open, onOpenChange }: Agen
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [appts]);
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: appointmentKeys.byClient(agent.clientId) });
+  // Invalida todas as janelas de período do cliente (prefixo).
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: appointmentKeys.all });
 
-  const create = useMutation({
+  const save = useMutation({
     mutationFn: () => {
       const svc = services.find((s) => s.label === service);
+      const durationMin = svc?.durationMin ?? 60;
+      if (editingId) {
+        return updateStaffAppointment(editingId, {
+          patientName: patient.trim(),
+          patientPhone: phone.trim() || null,
+          serviceLabel: service || "Atendimento",
+          startsAt: new Date(start).toISOString(),
+          durationMin,
+        });
+      }
       return createStaffAppointment({
         clientId: agent.clientId,
         agentId: agent.id,
@@ -84,19 +117,17 @@ export function AgentAgendaPanel({ agent, clientName, open, onOpenChange }: Agen
         patientPhone: phone.trim() || null,
         serviceLabel: service || "Atendimento",
         startsAt: new Date(start).toISOString(),
-        durationMin: svc?.durationMin ?? 60,
+        durationMin,
         notes: null,
       });
     },
     onSuccess: () => {
       invalidate();
-      toast.success("Agendamento criado.");
+      toast.success(editingId ? "Agendamento atualizado." : "Agendamento criado.");
       setShowForm(false);
-      setPatient("");
-      setPhone("");
-      setStart("");
+      resetForm();
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao agendar."),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao salvar."),
   });
 
   const cancel = useMutation({
@@ -129,17 +160,36 @@ export function AgentAgendaPanel({ agent, clientName, open, onOpenChange }: Agen
           </DialogDescription>
         </DialogHeader>
 
+        <PeriodFilter value={period} onChange={setPeriod} />
+
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            {(appts ?? []).length} agendamento(s) ativo(s)
+            {(appts ?? []).length} agendamento(s) no período
           </p>
-          <Button size="sm" className="gap-1.5" onClick={() => setShowForm((v) => !v)}>
+          <Button
+            size="sm"
+            className="gap-1.5"
+            onClick={() => {
+              if (showForm) {
+                setShowForm(false);
+                resetForm();
+              } else {
+                resetForm();
+                setShowForm(true);
+              }
+            }}
+          >
             <CalendarPlus className="h-4 w-4" /> {showForm ? "Fechar" : "Novo agendamento"}
           </Button>
         </div>
 
         {showForm && (
           <div className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-2">
+            {editingId && (
+              <p className="text-xs font-medium text-primary sm:col-span-2">
+                Editando agendamento — altere o que precisar e salve.
+              </p>
+            )}
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Paciente</Label>
               <Input
@@ -185,10 +235,14 @@ export function AgentAgendaPanel({ agent, clientName, open, onOpenChange }: Agen
             <div className="sm:col-span-2">
               <Button
                 className="w-full"
-                disabled={!canCreate || create.isPending}
-                onClick={() => create.mutate()}
+                disabled={!canCreate || save.isPending}
+                onClick={() => save.mutate()}
               >
-                {create.isPending ? "Salvando…" : "Confirmar agendamento"}
+                {save.isPending
+                  ? "Salvando…"
+                  : editingId
+                    ? "Salvar alterações"
+                    : "Confirmar agendamento"}
               </Button>
             </div>
           </div>
@@ -197,7 +251,7 @@ export function AgentAgendaPanel({ agent, clientName, open, onOpenChange }: Agen
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
           {grouped.length === 0 && (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              Nenhum agendamento ativo.
+              Nenhum agendamento no período selecionado.
             </p>
           )}
           {grouped.map(([day, items]) => (
@@ -278,6 +332,15 @@ export function AgentAgendaPanel({ agent, clientName, open, onOpenChange }: Agen
                         </span>
                       )}
 
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary"
+                        onClick={() => openEdit(a)}
+                        title="Editar"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
                       <Button
                         size="icon"
                         variant="ghost"

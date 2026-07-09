@@ -98,6 +98,56 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    if (body.action === "update") {
+      const id = String(body.appointmentId ?? "");
+      if (!id) return json({ error: "Agendamento inválido." }, 400);
+      // Ownership: o agendamento tem que ser do cliente.
+      const { data: appt } = await db
+        .from("appointments")
+        .select(
+          "id, client_id, starts_at, duration_min, service_label, patient_name, patient_phone",
+        )
+        .eq("id", id)
+        .maybeSingle();
+      if (!appt || appt.client_id !== clientId) return json({ error: "Forbidden" }, 403);
+
+      const services = (agent?.agenda_services as AgentService[]) ?? [];
+      const label = body.serviceLabel?.trim() || appt.service_label || "Atendimento";
+      const svc = services.find((s) => s.label === label);
+      const durationMin = Number(body.durationMin) || svc?.durationMin || appt.duration_min || 60;
+      const startsAt = body.startsAt ? new Date(body.startsAt) : new Date(appt.starts_at);
+      const endsAt = new Date(startsAt.getTime() + durationMin * 60_000);
+
+      // Conflito: outro agendamento ativo sobrepondo (excluindo o próprio).
+      const { data: busy } = await db
+        .from("appointments")
+        .select("id")
+        .eq("client_id", clientId)
+        .eq("status", "scheduled")
+        .neq("id", id)
+        .lt("starts_at", endsAt.toISOString())
+        .gt("ends_at", startsAt.toISOString());
+      if ((busy ?? []).length > 0) return json({ error: "Horário indisponível." }, 409);
+
+      const patientName =
+        body.patientName !== undefined ? body.patientName.trim() || null : appt.patient_name;
+      const patientPhone =
+        body.patientPhone !== undefined ? body.patientPhone.trim() || null : appt.patient_phone;
+      const { error } = await db
+        .from("appointments")
+        .update({
+          patient_name: patientName,
+          patient_phone: patientPhone,
+          service_label: label,
+          duration_min: durationMin,
+          starts_at: startsAt.toISOString(),
+          ends_at: endsAt.toISOString(),
+        })
+        .eq("id", id);
+      if (error) throw error;
+      return json({ ok: true });
+    }
+
     if (body.action === "set_status") {
       const id = String(body.appointmentId ?? "");
       const status = String(body.status ?? "");

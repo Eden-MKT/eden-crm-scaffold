@@ -41,16 +41,24 @@ export function mapAppointment(row: AppointmentRow): Appointment {
 
 export const appointmentKeys = {
   all: ["appointments"] as const,
-  byClient: (clientId: string) => [...appointmentKeys.all, clientId] as const,
+  byClient: (clientId: string, fromISO?: string, toISO?: string) =>
+    [...appointmentKeys.all, clientId, fromISO ?? "", toISO ?? ""] as const,
 };
 
-// Agendamentos de um cliente (staff, RLS is_staff) — próximos/futuros primeiro.
-export async function fetchClientAppointments(clientId: string): Promise<Appointment[]> {
+// Agendamentos de um cliente no período (staff, RLS is_staff).
+// Um item entra se TOCA o intervalo (ends_at >= from && starts_at <= to).
+export async function fetchClientAppointments(
+  clientId: string,
+  fromISO: string,
+  toISO: string,
+): Promise<Appointment[]> {
   const { data, error } = await supabase
     .from("appointments")
     .select(APPT_COLS)
     .eq("client_id", clientId)
     .neq("status", "cancelled")
+    .gte("ends_at", fromISO)
+    .lte("starts_at", toISO)
     .order("starts_at", { ascending: true });
   if (error) throw error;
   return (data ?? []).map(mapAppointment);
@@ -85,6 +93,32 @@ export async function createStaffAppointment(input: StaffApptInput): Promise<voi
     source: "staff",
     notes: input.notes,
   });
+  if (error) throw error;
+}
+
+export interface StaffApptUpdate {
+  patientName: string;
+  patientPhone: string | null;
+  serviceLabel: string;
+  startsAt: string; // ISO
+  durationMin: number;
+}
+
+// Edita um agendamento (staff). Sem checagem de conflito — override consciente da equipe.
+export async function updateStaffAppointment(id: string, patch: StaffApptUpdate): Promise<void> {
+  const starts = new Date(patch.startsAt);
+  const ends = new Date(starts.getTime() + patch.durationMin * 60_000);
+  const { error } = await supabase
+    .from("appointments")
+    .update({
+      patient_name: patch.patientName || null,
+      patient_phone: patch.patientPhone,
+      service_label: patch.serviceLabel,
+      duration_min: patch.durationMin,
+      starts_at: starts.toISOString(),
+      ends_at: ends.toISOString(),
+    })
+    .eq("id", id);
   if (error) throw error;
 }
 

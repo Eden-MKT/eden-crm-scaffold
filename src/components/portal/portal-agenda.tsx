@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Bot, CalendarPlus, Check, RotateCcw, User, UserX, X } from "lucide-react";
+import { Bot, CalendarPlus, Check, Pencil, RotateCcw, User, UserX, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -11,10 +11,12 @@ import {
   fetchPortalAgenda,
   portalAgendaKeys,
   setPortalAppointmentStatus,
+  updatePortalAppointment,
   type PortalAppointment,
 } from "@/lib/portal/agenda";
 import { portalKeys } from "@/lib/portal/queries";
 import { cn } from "@/lib/utils";
+import { defaultPeriod, PeriodFilter } from "@/components/agenda/period-filter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,19 +31,40 @@ import {
 export function PortalAgenda() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [patient, setPatient] = useState("");
   const [phone, setPhone] = useState("");
   const [service, setService] = useState("");
   const [start, setStart] = useState("");
+  const [period, setPeriod] = useState(defaultPeriod);
 
+  const fromISO = period.from.toISOString();
+  const toISO = period.to.toISOString();
   const { data, isLoading } = useQuery({
-    queryKey: portalAgendaKeys.list(),
-    queryFn: fetchPortalAgenda,
+    queryKey: portalAgendaKeys.list(fromISO, toISO),
+    queryFn: () => fetchPortalAgenda(fromISO, toISO),
     refetchInterval: 30_000,
   });
 
   const services = data?.services ?? [];
   const appts = data?.appointments ?? [];
+
+  const resetForm = () => {
+    setEditingId(null);
+    setPatient("");
+    setPhone("");
+    setService("");
+    setStart("");
+  };
+
+  const openEdit = (a: PortalAppointment) => {
+    setEditingId(a.id);
+    setPatient(a.patientName ?? "");
+    setPhone(a.patientPhone ?? "");
+    setService(a.serviceLabel ?? "");
+    setStart(format(new Date(a.startsAt), "yyyy-MM-dd'T'HH:mm"));
+    setShowForm(true);
+  };
 
   const grouped = useMemo(() => {
     const map = new Map<string, PortalAppointment[]>();
@@ -53,28 +76,36 @@ export function PortalAgenda() {
   }, [appts]);
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: portalAgendaKeys.list() });
-    // Atualiza os cards do painel (Agendamentos / Não comparecimentos).
+    // Todas as janelas de período + cards do painel.
+    queryClient.invalidateQueries({ queryKey: portalAgendaKeys.all });
     queryClient.invalidateQueries({ queryKey: portalKeys.metrics() });
   };
 
-  const create = useMutation({
-    mutationFn: () =>
-      createPortalAppointment({
+  const save = useMutation({
+    mutationFn: () => {
+      if (editingId) {
+        return updatePortalAppointment({
+          appointmentId: editingId,
+          patientName: patient.trim(),
+          patientPhone: phone.trim(),
+          serviceLabel: service || undefined,
+          startsAt: new Date(start).toISOString(),
+        });
+      }
+      return createPortalAppointment({
         patientName: patient.trim(),
         patientPhone: phone.trim() || undefined,
         serviceLabel: service || services[0]?.label,
         startsAt: new Date(start).toISOString(),
-      }),
+      });
+    },
     onSuccess: () => {
       invalidate();
-      toast.success("Agendamento criado.");
+      toast.success(editingId ? "Agendamento atualizado." : "Agendamento criado.");
       setShowForm(false);
-      setPatient("");
-      setPhone("");
-      setStart("");
+      resetForm();
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao agendar."),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao salvar."),
   });
 
   const cancel = useMutation({
@@ -109,13 +140,32 @@ export function PortalAgenda() {
     <div className="flex h-full flex-col gap-3 p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">Sua agenda</h2>
-        <Button size="sm" className="gap-1.5" onClick={() => setShowForm((v) => !v)}>
+        <Button
+          size="sm"
+          className="gap-1.5"
+          onClick={() => {
+            if (showForm) {
+              setShowForm(false);
+              resetForm();
+            } else {
+              resetForm();
+              setShowForm(true);
+            }
+          }}
+        >
           <CalendarPlus className="h-4 w-4" /> {showForm ? "Fechar" : "Novo"}
         </Button>
       </div>
 
+      <PeriodFilter value={period} onChange={setPeriod} />
+
       {showForm && (
         <div className="grid gap-3 rounded-lg border border-border p-3">
+          {editingId && (
+            <p className="text-xs font-medium text-primary">
+              Editando agendamento — altere o que precisar e salve.
+            </p>
+          )}
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">Paciente</Label>
             <Input
@@ -156,8 +206,12 @@ export function PortalAgenda() {
             <Label className="text-xs text-muted-foreground">Início</Label>
             <Input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} />
           </div>
-          <Button disabled={!canCreate || create.isPending} onClick={() => create.mutate()}>
-            {create.isPending ? "Salvando…" : "Confirmar agendamento"}
+          <Button disabled={!canCreate || save.isPending} onClick={() => save.mutate()}>
+            {save.isPending
+              ? "Salvando…"
+              : editingId
+                ? "Salvar alterações"
+                : "Confirmar agendamento"}
           </Button>
         </div>
       )}
@@ -165,7 +219,9 @@ export function PortalAgenda() {
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
         {isLoading && <p className="py-6 text-center text-sm text-muted-foreground">Carregando…</p>}
         {!isLoading && grouped.length === 0 && (
-          <p className="py-8 text-center text-sm text-muted-foreground">Nenhum agendamento.</p>
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            Nenhum agendamento no período selecionado.
+          </p>
         )}
         {grouped.map(([day, items]) => (
           <div key={day}>
@@ -242,6 +298,15 @@ export function PortalAgenda() {
                     </span>
                   )}
 
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary"
+                    onClick={() => openEdit(a)}
+                    title="Editar"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
                   <Button
                     size="icon"
                     variant="ghost"

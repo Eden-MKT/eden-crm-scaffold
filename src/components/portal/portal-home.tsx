@@ -29,7 +29,7 @@ export function PortalHome() {
   // Só mostra a aba Agenda quando o atendimento tem agenda ativa (mesma query da aba).
   const { data: agenda } = useQuery({
     queryKey: portalAgendaKeys.list(),
-    queryFn: fetchPortalAgenda,
+    queryFn: () => fetchPortalAgenda(),
   });
   const agendaEnabled = agenda?.agendaEnabled === true;
 
