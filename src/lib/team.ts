@@ -34,6 +34,18 @@ export const TEAM_MEMBER_LABELS: Record<Exclude<TeamMember, null>, string> = {
   joao: "João",
 };
 
+/** Membros da equipe para seleção (ex.: responsável de um compromisso). */
+export const TEAM_MEMBERS: { key: Exclude<TeamMember, null>; label: string; email: string }[] = [
+  { key: "filipe", label: "Filipe", email: FILIPE_EMAILS[0] ?? DEFAULT_FILIPE_EMAIL },
+  { key: "joao", label: "João", email: JOAO_EMAILS[0] ?? DEFAULT_JOAO_EMAILS[0] },
+];
+
+/** Rótulo amigável de um email da equipe (ou o próprio email se desconhecido). */
+export function teamLabelForEmail(email: string): string {
+  const member = resolveTeamMember(email);
+  return member ? TEAM_MEMBER_LABELS[member] : email;
+}
+
 /** E-mails reconhecidos (para mensagens de ajuda). */
 export const TEAM_EMAILS = {
   filipe: FILIPE_EMAILS.join(" ou "),

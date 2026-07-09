@@ -60,6 +60,7 @@ export interface Database {
           ends_at: string;
           client_id: string | null;
           notes: string | null;
+          assignees: string[];
           created_by: string | null;
           created_at: string;
         };
@@ -71,6 +72,7 @@ export interface Database {
           ends_at: string;
           client_id?: string | null;
           notes?: string | null;
+          assignees?: string[];
           created_by?: string | null;
           created_at?: string;
         };
@@ -82,6 +84,7 @@ export interface Database {
           ends_at?: string;
           client_id?: string | null;
           notes?: string | null;
+          assignees?: string[];
           created_by?: string | null;
           created_at?: string;
         };

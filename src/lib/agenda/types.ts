@@ -12,6 +12,7 @@ export interface AgendaEvent {
   endsAt: string;
   clientId: string | null;
   notes: string | null;
+  assignees: string[];
   createdAt: string;
 }
 
@@ -39,6 +40,7 @@ export function mapEvent(row: EventRow): AgendaEvent {
     endsAt: row.ends_at,
     clientId: row.client_id,
     notes: row.notes,
+    assignees: row.assignees ?? [],
     createdAt: row.created_at,
   };
 }

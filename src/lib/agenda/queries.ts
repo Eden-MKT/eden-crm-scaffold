@@ -7,7 +7,8 @@ export const agendaKeys = {
   upcoming: () => [...agendaKeys.all, "upcoming"] as const,
 };
 
-const EVENT_COLS = "id, title, type, starts_at, ends_at, client_id, notes, created_by, created_at";
+const EVENT_COLS =
+  "id, title, type, starts_at, ends_at, client_id, notes, assignees, created_by, created_at";
 
 // Eventos que tocam o intervalo [from, to] (ISO).
 export async function fetchEventsInRange(from: string, to: string): Promise<AgendaEvent[]> {
@@ -40,6 +41,7 @@ export interface EventInput {
   endsAt: string;
   clientId: string | null;
   notes: string | null;
+  assignees: string[];
 }
 
 export async function createEvent(input: EventInput): Promise<void> {
@@ -50,6 +52,7 @@ export async function createEvent(input: EventInput): Promise<void> {
     ends_at: input.endsAt,
     client_id: input.clientId,
     notes: input.notes,
+    assignees: input.assignees,
   });
   if (error) throw error;
 }
@@ -64,6 +67,7 @@ export async function updateEvent(id: string, input: EventInput): Promise<void> 
       ends_at: input.endsAt,
       client_id: input.clientId,
       notes: input.notes,
+      assignees: input.assignees,
     })
     .eq("id", id);
   if (error) throw error;

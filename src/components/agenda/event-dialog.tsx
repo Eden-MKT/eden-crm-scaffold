@@ -13,6 +13,9 @@ import {
 } from "@/lib/agenda/queries";
 import { EVENT_TYPES, type AgendaEvent, type AgendaEventType } from "@/lib/agenda/types";
 import { clientsKeys, fetchClients } from "@/lib/clients/queries";
+import { useAuth } from "@/lib/auth";
+import { TEAM_MEMBERS } from "@/lib/team";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,6 +51,7 @@ const localToIso = (local: string) => new Date(local).toISOString();
 
 export function EventDialog({ open, onOpenChange, event, defaultDate }: EventDialogProps) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const editing = !!event;
 
   const [title, setTitle] = useState("");
@@ -56,6 +60,10 @@ export function EventDialog({ open, onOpenChange, event, defaultDate }: EventDia
   const [end, setEnd] = useState("");
   const [clientId, setClientId] = useState<string>("none");
   const [notes, setNotes] = useState("");
+  const [assignees, setAssignees] = useState<string[]>([]);
+
+  const toggleAssignee = (email: string) =>
+    setAssignees((a) => (a.includes(email) ? a.filter((e) => e !== email) : [...a, email]));
 
   const { data: clients } = useQuery({ queryKey: clientsKeys.list(), queryFn: fetchClients });
 
@@ -68,6 +76,7 @@ export function EventDialog({ open, onOpenChange, event, defaultDate }: EventDia
       setEnd(toLocalInput(event.endsAt));
       setClientId(event.clientId ?? "none");
       setNotes(event.notes ?? "");
+      setAssignees(event.assignees ?? []);
     } else {
       const base = defaultDate ?? new Date();
       base.setMinutes(0, 0, 0);
@@ -78,8 +87,12 @@ export function EventDialog({ open, onOpenChange, event, defaultDate }: EventDia
       setEnd(format(later, "yyyy-MM-dd'T'HH:mm"));
       setClientId("none");
       setNotes("");
+      // Ao criar, o responsável padrão é o próprio usuário (se for da equipe).
+      const myEmail = user?.email?.toLowerCase();
+      const mine = TEAM_MEMBERS.find((m) => m.email === myEmail)?.email;
+      setAssignees(mine ? [mine] : []);
     }
-  }, [open, event, defaultDate]);
+  }, [open, event, defaultDate, user]);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: agendaKeys.all });
@@ -94,6 +107,7 @@ export function EventDialog({ open, onOpenChange, event, defaultDate }: EventDia
         endsAt: localToIso(end),
         clientId: clientId === "none" ? null : clientId,
         notes: notes.trim() || null,
+        assignees,
       };
       return editing ? updateEvent(event!.id, payload) : createEvent(payload);
     },
@@ -149,6 +163,35 @@ export function EventDialog({ open, onOpenChange, event, defaultDate }: EventDia
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Responsável</Label>
+            <div className="flex flex-wrap gap-2">
+              {TEAM_MEMBERS.map((m) => {
+                const active = assignees.includes(m.email);
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => toggleAssignee(m.email)}
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                      active
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+            {assignees.length === 0 && (
+              <p className="text-[11px] text-muted-foreground/70">
+                Sem responsável: visível só para os donos.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
