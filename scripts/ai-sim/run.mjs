@@ -70,7 +70,7 @@ async function customerTurn(persona, transcript) {
 }
 
 // Gera a resposta da nossa IA (simulate-turn, dry-run). Retenta erros transitórios.
-async function clinicTurn(supabase, agent, transcript) {
+async function clinicTurn(supabase, agent, transcript, contactAppointments = []) {
   const messages = transcript.map((t) => ({
     role: t.who === "customer" ? "user" : "assistant",
     content: t.text,
@@ -78,7 +78,7 @@ async function clinicTurn(supabase, agent, transcript) {
   let lastErr = "";
   for (let attempt = 0; attempt < 5; attempt++) {
     const { data, error } = await supabase.functions.invoke("simulate-turn", {
-      body: { agent, messages },
+      body: { agent, messages, contactAppointments },
     });
     if (!error && !data?.error) return data;
     lastErr =
@@ -133,16 +133,32 @@ async function analyze(name, transcript) {
 
 async function runScenario(supabase, sc) {
   const transcript = [];
+  // Estado simulado dos agendamentos do contato (alimenta contactAppointments do próximo turno).
+  const simAppointments = [];
   for (let turn = 0; turn < sc.maxTurns; turn++) {
     const cust = await customerTurn(sc.persona, transcript);
     const ended = /\[\[FIM\]\]/i.test(cust);
     transcript.push({ who: "customer", text: cust.replace(/\[\[FIM\]\]/gi, "").trim() });
     if (ended) break;
     await sleep(1500); // pacing p/ não estourar o TPM do gpt-4o
-    const reply = await clinicTurn(supabase, sc.agent, transcript);
+    const reply = await clinicTurn(supabase, sc.agent, transcript, simAppointments);
+    // Atualiza o estado com os agendamentos simulados deste turno.
+    for (const b of reply.bookings ?? []) {
+      if (b.replacedPrevious) {
+        const idx = simAppointments.findIndex((a) => a.status === "scheduled");
+        if (idx >= 0) simAppointments.splice(idx, 1);
+      }
+      simAppointments.push({
+        startsAt: b.startsAt,
+        serviceLabel: b.serviceLabel,
+        status: "scheduled",
+      });
+    }
     if (reply.silent) {
-      transcript.push({ who: "clinic", text: "(sem resposta — encerrou)" });
-      break;
+      // IA optou por não responder (encerramento) — não entra no transcript do modelo,
+      // mas o cliente pode continuar (ex.: pedir mudança depois do silêncio).
+      console.log("  IA : (silêncio — sem resposta)");
+      continue;
     }
     transcript.push({
       who: "clinic",
@@ -151,7 +167,7 @@ async function runScenario(supabase, sc) {
     });
   }
   const findings = await analyze(sc.name, transcript);
-  return { transcript, findings };
+  return { transcript, findings, simAppointments };
 }
 
 async function main() {
@@ -171,7 +187,7 @@ async function main() {
 
   for (const sc of list) {
     process.stdout.write(`\n▶ Cenário: ${sc.name}\n`);
-    const { transcript, findings } = await runScenario(supabase, sc);
+    const { transcript, findings, simAppointments } = await runScenario(supabase, sc);
 
     const md =
       `# ${sc.name}\n\n## Transcript\n\n` +
@@ -197,6 +213,10 @@ async function main() {
       transcript
         .map((t) => `  ${t.who === "clinic" ? "IA " : "CLI"}: ${t.text.replace(/\n/g, " ⏎ ")}`)
         .join("\n"),
+    );
+    const ativos = simAppointments.filter((a) => a.status === "scheduled");
+    console.log(
+      `  — Agendamentos ativos ao final: ${ativos.length}${ativos.length > 1 ? "  ⚠️ DUPLICATA!" : ""}`,
     );
     console.log(`  — Achados (${findings.length}):`);
     for (const f of findings) console.log(`    • [${f.severity}] ${f.issue}`);

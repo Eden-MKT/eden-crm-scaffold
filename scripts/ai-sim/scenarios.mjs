@@ -157,4 +157,25 @@ export const SCENARIOS = [
     persona:
       "Você JÁ tem uma consulta marcada para amanhã de manhã, mas quer REMARCAR para outro dia (surgiu um imprevisto). Peça para remarcar; depois pergunte se dá pra cancelar. Mensagens curtas. Teste como a IA lida com um pedido que talvez ela não consiga executar direto (remarcar/cancelar): ela deve ser clara, acolhedora e resolver (ex.: oferecer novo horário ou encaminhar pra recepção), sem inventar nem enrolar.",
   },
+  {
+    name: "pos-agendamento",
+    maxTurns: 14,
+    agent: {
+      ...baseAgent,
+      niche: "clínica de ortopedia e infiltrações",
+      system_prompt:
+        "Você é o atendente da Rbclinic, clínica do Dr. Rafael (ortopedista). Acolha, tire dúvidas e agende a consulta de avaliação.",
+      profession: "Médico ortopedista",
+      responsible_name: "Dr. Rafael",
+      business_address: "Unidade Leblon (Rio de Janeiro)",
+      business_info:
+        "Rbclinic, Dr. Rafael. Consulta de avaliação e infiltrações. Valores definidos na avaliação.",
+      conversion_goal: "Agendar a consulta de avaliação.",
+      greeting: "Oi! Aqui é da Rbclinic 😊",
+      agenda_services: [{ label: "Consulta de avaliação", durationMin: 60 }],
+    },
+    // Reproduz exatamente o fluxo do bug real (Alexandre/Rbclinic).
+    persona:
+      "Você quer marcar uma consulta de avaliação para a próxima segunda-feira. Siga EXATAMENTE este roteiro, um passo por mensagem: (1) peça horários para segunda; (2) escolha um dos horários oferecidos; (3) DEPOIS que a clínica confirmar o agendamento, mande uma mensagem tipo 'Obrigado. Segunda-feira às [hora] estarei no consultório.'; (4) depois mande só 'Muito obrigado!'; (5) depois peça para MUDAR o horário para 1 hora mais tarde; (6) quando confirmarem a mudança, agradeça e encerre. Você está testando se a clínica se confunde com o próprio agendamento — observe se ela diz que o SEU horário 'está ocupado' (isso é errado).",
+  },
 ];

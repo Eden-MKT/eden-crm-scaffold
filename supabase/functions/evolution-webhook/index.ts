@@ -23,7 +23,7 @@ import {
 import { buildSystemPrompt, handleVerificar, toolsForAgent } from "../_shared/ai-core.ts";
 
 const DEBOUNCE_MS = 15000; // fallback quando o agente não tem response_delay_seconds
-const HISTORY = 20;
+const HISTORY = 40;
 // Chance de cada mensagem da IA sair como "resposta/citar" à mensagem do cliente.
 const REPLY_QUOTE_PROBABILITY = 0.2;
 
@@ -384,6 +384,18 @@ async function handleAgendar(
   const service = resolveService(services, args.servico);
   const startsAt = zonedToUtc(args.data, args.hora, tz);
 
+  // Remarcação automática: se o contato já tem agendamento futuro nesta conversa,
+  // o novo substitui o antigo (evita duplicata quando o cliente muda o horário).
+  const { data: existing } = await db
+    .from("appointments")
+    .select("id, starts_at")
+    .eq("conversation_id", conversationId)
+    .eq("status", "scheduled")
+    .gte("ends_at", new Date().toISOString())
+    .order("starts_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
   const res = await createAppointment(db, {
     clientId: String(agent.client_id),
     agentId: String(agent.id),
@@ -394,6 +406,7 @@ async function handleAgendar(
     patientName: args.nome_paciente ?? null,
     patientPhone: remoteJid.split("@")[0] || null,
     source: "ai",
+    ignoreAppointmentId: existing?.id ?? null,
   });
 
   if (!res.ok) {
@@ -409,10 +422,26 @@ async function handleAgendar(
     }
     return { ok: false, motivo: "Não foi possível agendar agora." };
   }
+
+  // Novo criado com sucesso: cancela o anterior (remarcação concluída).
+  let remarcadoDe: string | null = null;
+  if (existing?.id) {
+    await db.from("appointments").update({ status: "cancelled" }).eq("id", existing.id);
+    const prev = utcToZonedParts(new Date(existing.starts_at), tz);
+    remarcadoDe = `${prev.dateISO} ${prev.time}`;
+  }
+
   const local = utcToZonedParts(startsAt, tz);
   return {
     ok: true,
     confirmado: { data: local.dateISO, hora: local.time, servico: service.label },
+    ...(remarcadoDe
+      ? {
+          remarcado: true,
+          horario_anterior: remarcadoDe,
+          observacao: "O agendamento anterior foi cancelado; informe ao cliente que foi remarcado.",
+        }
+      : {}),
   };
 }
 
@@ -447,6 +476,28 @@ async function runPipeline(
       phone: remoteJid.split("@")[0] || null,
     };
 
+    // Agendamentos deste contato (últimos 30 dias + futuros) — a IA precisa saber
+    // deles para não tratar o horário do próprio cliente como conflito/duplicar.
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const phone = remoteJid.split("@")[0] || "";
+    let apptQuery = db
+      .from("appointments")
+      .select("starts_at, service_label, status, conversation_id, patient_phone")
+      .eq("client_id", String(agent.client_id))
+      .in("status", ["scheduled", "completed"])
+      .gte("starts_at", since);
+    apptQuery = phone
+      ? apptQuery.or(`conversation_id.eq.${conversationId},patient_phone.eq.${phone}`)
+      : apptQuery.eq("conversation_id", conversationId);
+    const { data: ownAppts } = await apptQuery.order("starts_at", { ascending: true }).limit(5);
+    const contactAppointments = (ownAppts ?? []).map(
+      (a: { starts_at: string; service_label: string | null; status: string }) => ({
+        startsAt: a.starts_at,
+        serviceLabel: a.service_label,
+        status: a.status,
+      }),
+    );
+
     const { data: history } = await db
       .from("whatsapp_messages")
       .select("sender, content")
@@ -457,7 +508,7 @@ async function runPipeline(
 
     const model = String(agent.model ?? "gpt-4o-mini");
     const messages: ChatMessage[] = [
-      { role: "system", content: buildSystemPrompt(agent, contact) },
+      { role: "system", content: buildSystemPrompt(agent, contact, contactAppointments) },
       ...ordered.map((m: { sender: string; content: string | null }) => ({
         role: (m.sender === "contact" ? "user" : "assistant") as "user" | "assistant",
         content: m.content ?? "",
@@ -508,7 +559,7 @@ async function runPipeline(
               /* ignora argumentos inválidos */
             }
           } else if (tc.name === "verificar_disponibilidade" && agendaOn) {
-            result = await handleVerificar(db, agent, tc.arguments);
+            result = await handleVerificar(db, agent, tc.arguments, conversationId);
           } else if (tc.name === "agendar" && agendaOn) {
             result = await handleAgendar(db, agent, conversationId, remoteJid, tc.arguments);
           }

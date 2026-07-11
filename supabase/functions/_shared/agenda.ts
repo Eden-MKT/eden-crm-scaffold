@@ -122,14 +122,22 @@ export function resolveService(services: AgentService[], requested?: string): Ag
   return { label: list[0].label, durationMin: Number(list[0].durationMin) || 60 };
 }
 
-async function scheduledInRange(db: DB, clientId: string, startUtc: Date, endUtc: Date) {
-  const { data } = await db
+async function scheduledInRange(
+  db: DB,
+  clientId: string,
+  startUtc: Date,
+  endUtc: Date,
+  ignoreAppointmentId?: string | null,
+) {
+  let q = db
     .from("appointments")
     .select("starts_at, ends_at")
     .eq("client_id", clientId)
     .eq("status", "scheduled")
     .lt("starts_at", endUtc.toISOString())
     .gt("ends_at", startUtc.toISOString());
+  if (ignoreAppointmentId) q = q.neq("id", ignoreAppointmentId);
+  const { data } = await q;
   return (data ?? []) as Array<{ starts_at: string; ends_at: string }>;
 }
 
@@ -177,8 +185,9 @@ export async function isFree(
   clientId: string,
   startUtc: Date,
   endUtc: Date,
+  ignoreAppointmentId?: string | null,
 ): Promise<boolean> {
-  const busy = await scheduledInRange(db, clientId, startUtc, endUtc);
+  const busy = await scheduledInRange(db, clientId, startUtc, endUtc, ignoreAppointmentId);
   return busy.length === 0;
 }
 
@@ -196,10 +205,12 @@ export async function createAppointment(
     patientPhone?: string | null;
     source: "ai" | "staff" | "client";
     notes?: string | null;
+    /** Ignora este agendamento no check de conflito (remarcação: o horário antigo é dele). */
+    ignoreAppointmentId?: string | null;
   },
 ): Promise<{ ok: boolean; id?: string; reason?: string }> {
   const endsAt = new Date(a.startsAt.getTime() + a.durationMin * 60_000);
-  if (!(await isFree(db, a.clientId, a.startsAt, endsAt))) {
+  if (!(await isFree(db, a.clientId, a.startsAt, endsAt, a.ignoreAppointmentId))) {
     return { ok: false, reason: "conflict" };
   }
   const { data, error } = await db

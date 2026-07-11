@@ -3,7 +3,12 @@ import { json, preflight } from "../_shared/cors.ts";
 import { requireStaff } from "../_shared/portal.ts";
 import { chat, type ChatMessage } from "../_shared/openai.ts";
 import { NO_REPLY, splitBubbles } from "../_shared/humanize.ts";
-import { buildSystemPrompt, handleVerificar, toolsForAgent } from "../_shared/ai-core.ts";
+import {
+  buildSystemPrompt,
+  handleVerificar,
+  toolsForAgent,
+  type ContactAppointment,
+} from "../_shared/ai-core.ts";
 import {
   resolveService,
   utcToZonedParts,
@@ -24,6 +29,7 @@ Deno.serve(async (req) => {
     agent?: Record<string, unknown>;
     messages?: { role: "user" | "assistant"; content: string }[];
     contact?: { name: string | null; phone: string | null };
+    contactAppointments?: ContactAppointment[];
   };
   try {
     body = await req.json();
@@ -34,15 +40,20 @@ Deno.serve(async (req) => {
   const agent = body.agent ?? {};
   const history = Array.isArray(body.messages) ? body.messages : [];
   const contact = body.contact ?? { name: null, phone: null };
+  const contactAppointments = Array.isArray(body.contactAppointments)
+    ? body.contactAppointments
+    : [];
   const model = String(agent.model ?? "gpt-4o");
 
   const messages: ChatMessage[] = [
-    { role: "system", content: buildSystemPrompt(agent, contact) },
+    { role: "system", content: buildSystemPrompt(agent, contact, contactAppointments) },
     ...history.map((m) => ({ role: m.role, content: m.content })),
   ];
   const tools = toolsForAgent(agent);
   const agendaOn = agent.agenda_enabled === true;
   const calledTools: string[] = [];
+  // Agendamentos simulados neste turno (para o runner manter estado entre turnos).
+  const bookings: { startsAt: string; serviceLabel: string; replacedPrevious: boolean }[] = [];
 
   try {
     let finalText: string | null = null;
@@ -75,10 +86,26 @@ Deno.serve(async (req) => {
             );
             if (a.data && a.hora) {
               const local = utcToZonedParts(zonedToUtc(a.data, a.hora, tz), tz);
+              // Se o contato já tinha agendamento ativo, simula a remarcação.
+              const prev = contactAppointments.find((c) => c.status === "scheduled");
+              const prevLocal = prev ? utcToZonedParts(new Date(prev.startsAt), tz) : null;
+              bookings.push({
+                startsAt: zonedToUtc(a.data, a.hora, tz).toISOString(),
+                serviceLabel: service.label,
+                replacedPrevious: !!prev,
+              });
               result = {
                 ok: true,
                 simulado: true,
                 confirmado: { data: local.dateISO, hora: local.time, servico: service.label },
+                ...(prevLocal
+                  ? {
+                      remarcado: true,
+                      horario_anterior: `${prevLocal.dateISO} ${prevLocal.time}`,
+                      observacao:
+                        "O agendamento anterior foi cancelado; informe ao cliente que foi remarcado.",
+                    }
+                  : {}),
               };
             } else {
               result = { ok: false, erro: "Informe data e hora." };
@@ -93,16 +120,16 @@ Deno.serve(async (req) => {
     }
 
     if (!finalText)
-      return json({ bubbles: [], finalText: "", toolCalls: calledTools, silent: true });
+      return json({ bubbles: [], finalText: "", toolCalls: calledTools, bookings, silent: true });
 
     if (finalText.includes(NO_REPLY)) {
       const cleaned = finalText.split(NO_REPLY).join("").trim();
       if (!cleaned)
-        return json({ bubbles: [], finalText: "", toolCalls: calledTools, silent: true });
+        return json({ bubbles: [], finalText: "", toolCalls: calledTools, bookings, silent: true });
       finalText = cleaned;
     }
 
-    return json({ bubbles: splitBubbles(finalText), finalText, toolCalls: calledTools });
+    return json({ bubbles: splitBubbles(finalText), finalText, toolCalls: calledTools, bookings });
   } catch (e) {
     console.error("simulate-turn error:", e);
     return json({ error: String(e) }, 500);

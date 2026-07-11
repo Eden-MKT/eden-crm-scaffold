@@ -6,6 +6,7 @@ import {
   freeSlots,
   MEDICAL_PROMPT,
   resolveService,
+  utcToZonedParts,
   type AgendaHours,
   type AgentService,
 } from "./agenda.ts";
@@ -126,10 +127,41 @@ export function buildClientDataBlock(agent: Agent): string {
   );
 }
 
+// Agendamento já existente do contato (injetado no prompt para a IA não "brigar"
+// com o próprio horário do cliente nem criar duplicatas).
+export interface ContactAppointment {
+  startsAt: string; // ISO UTC
+  serviceLabel: string | null;
+  status: string; // scheduled | completed | no_show
+}
+
+function buildContactAppointmentsBlock(appts: ContactAppointment[], tz: string): string {
+  if (!appts.length) return "";
+  const statusLabel: Record<string, string> = {
+    scheduled: "confirmado",
+    completed: "já realizado",
+    no_show: "não compareceu",
+  };
+  const lines = appts.map((a) => {
+    const local = utcToZonedParts(new Date(a.startsAt), tz);
+    return `- ${a.serviceLabel ?? "Atendimento"} em ${local.dateISO} às ${local.time} (${statusLabel[a.status] ?? a.status})`;
+  });
+  return `
+AGENDAMENTOS DESTE CONTATO (já registrados no sistema):
+${lines.join("\n")}
+Regras sobre esses agendamentos:
+- Se o cliente apenas CONFIRMAR ou AGRADECER um agendamento acima ("ok", "estarei lá", "obrigado"), responda confirmando com simpatia — NÃO chame verificar_disponibilidade nem agendar de novo. O horário dele já está garantido.
+- O horário dele NÃO é conflito para ele mesmo — nunca diga que o horário que ELE tem "está ocupado".
+- Se ele pedir para MUDAR o horário, use a ferramenta agendar com o novo horário: o sistema remarca sozinho (o anterior é cancelado automaticamente). Confirme a mudança citando o horário antigo e o novo.
+- Se ele disser que JÁ COMPARECEU/já fez a consulta, agradeça a visita e pergunte se precisa de algo mais — não ofereça reagendar.
+`.trim();
+}
+
 // System prompt completo do agente (idêntico em produção e simulação).
 export function buildSystemPrompt(
   agent: Agent,
   contact: { name: string | null; phone: string | null },
+  contactAppointments?: ContactAppointment[],
 ): string {
   const contactBlock =
     `Dados do contato (vindos do WhatsApp): nome = ${
@@ -168,6 +200,7 @@ export function buildSystemPrompt(
     agent.business_info ? `Informações do negócio: ${agent.business_info}` : "",
     buildClientDataBlock(agent),
     agendaBlock,
+    buildContactAppointmentsBlock(contactAppointments ?? [], tz),
     agent.conversion_goal ? `Objetivo do atendimento (conversão): ${agent.conversion_goal}` : "",
     agent.greeting ? `Saudação de referência: ${agent.greeting}` : "",
     agent.agenda_enabled === true ? dateBlock : "",
@@ -178,7 +211,14 @@ export function buildSystemPrompt(
 }
 
 // Tool verificar_disponibilidade: devolve horários livres reais (read-only).
-export async function handleVerificar(db: DB, agent: Agent, argsJson: string) {
+// conversationId (opcional): informa também os horários que o PRÓPRIO contato
+// já tem naquele dia — para o modelo não tratar o horário dele como conflito.
+export async function handleVerificar(
+  db: DB,
+  agent: Agent,
+  argsJson: string,
+  conversationId?: string | null,
+) {
   let args: { data?: string; servico?: string } = {};
   try {
     args = JSON.parse(argsJson || "{}");
@@ -197,11 +237,32 @@ export async function handleVerificar(db: DB, agent: Agent, argsJson: string) {
     hours,
     tz,
   });
+
+  let ownTimes: string[] = [];
+  if (conversationId) {
+    const { data: own } = await db
+      .from("appointments")
+      .select("starts_at")
+      .eq("conversation_id", conversationId)
+      .eq("status", "scheduled");
+    ownTimes = (own ?? [])
+      .map((o: { starts_at: string }) => utcToZonedParts(new Date(o.starts_at), tz))
+      .filter((p: { dateISO: string }) => p.dateISO === args.data)
+      .map((p: { time: string }) => p.time);
+  }
+
   return {
     data: args.data,
     servico: service.label,
     duracao_min: service.durationMin,
     horarios_livres: slots,
+    ...(ownTimes.length
+      ? {
+          agendamentos_do_proprio_contato: ownTimes,
+          observacao:
+            "Os horários acima em 'agendamentos_do_proprio_contato' já são DESTE cliente — não são conflito para ele; não os trate como ocupados nem ofereça reagendar sem ele pedir.",
+        }
+      : {}),
     ...(slots.length ? {} : { aviso: "Sem horários livres nesse dia; sugira outra data." }),
   };
 }

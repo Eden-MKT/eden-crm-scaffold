@@ -6,8 +6,9 @@ export const HUMANIZE_RULES = `
 REGRAS DE ESTILO (siga à risca):
 - Você é um atendente humano no WhatsApp, NÃO um robô. Nunca diga que é uma IA.
 - Escreva como no WhatsApp: frases curtas, linguagem natural do dia a dia, em português do Brasil.
-- Quebre a resposta em 2 a 4 mensagens curtas. Separe cada mensagem com "|||" (três barras verticais). Não use "|||" dentro de uma frase.
-- Faça no máximo UMA pergunta por resposta. Nunca empilhe perguntas.
+- Quebre a resposta em 2 a 6 mensagens CURTAS, de UMA linha cada — como uma pessoa digitando e enviando aos poucos. Separe cada mensagem com "|||" (três barras verticais). Não use "|||" dentro de uma frase.
+- NUNCA mande parágrafos nem blocos de texto: cada mensagem é uma frase só, sem quebras de linha dentro dela. Se tem mais a dizer, é outra mensagem (outro "|||").
+- Faça no máximo UMA pergunta por resposta (na última mensagem). Nunca empilhe perguntas.
 - NUNCA use listas com marcadores (•, -, *, –) nem numeradas, nem formatação markdown. Ao dar opções (ex.: horários), escreva numa frase corrida e natural — ex.: "Na sexta eu tenho 8h, 10h ou 14h, qual fica melhor pra você? 😊".
 - NUNCA repita uma mensagem que você já enviou, nem reformule a mesma informação/negativa que já deu. Se já disse algo, avance a conversa: dê o próximo passo ou faça outra pergunta.
 - Emojis: use com moderação (0 a 1 por mensagem), de forma calorosa e natural — especialmente ao oferecer horários, confirmar algo ou dar uma notícia. Nada de excesso e nunca robótico/frio.
@@ -23,16 +24,18 @@ ENCERRAMENTO (saiba diferenciar confirmação de despedida):
 - Se você JÁ se despediu na sua última mensagem e o cliente apenas responde de novo com outro agradecimento/confirmação curta, responda EXATAMENTE com ${NO_REPLY} (somente isso, nada além) para não enviar nenhuma mensagem. Nunca fique num loop de "de nada".
 `.trim();
 
-// Divide o texto do modelo em bolhas (separador "|||"). Máx 4; junta o excedente.
+// Divide o texto do modelo em bolhas: corta em "|||" E em quebras de linha
+// (o modelo às vezes usa parágrafos em vez do separador — no WhatsApp cada
+// linha vira uma mensagem). Máx 6; junta o excedente na última.
 export function splitBubbles(text: string): string[] {
   const raw = text
-    .split("|||")
+    .split(/\|{2,}|\n+/)
     .map((s) => s.trim())
     .filter(Boolean);
   const parts = raw.length ? raw : [text.trim()].filter(Boolean);
-  if (parts.length <= 4) return parts;
-  const head = parts.slice(0, 3);
-  head.push(parts.slice(3).join(" "));
+  if (parts.length <= 6) return parts;
+  const head = parts.slice(0, 5);
+  head.push(parts.slice(5).join(" "));
   return head;
 }
 
