@@ -23,9 +23,19 @@ interface MessageThreadProps {
   conversation: WhatsappConversation;
   agentId: string;
   onBack?: () => void;
+  /** Conteúdo extra no header, depois dos badges (ex.: ações do painel Markei). */
+  headerExtras?: React.ReactNode;
+  /** Conteúdo entre o header e a área de mensagens (ex.: contexto da conversa). */
+  aboveMessages?: React.ReactNode;
 }
 
-export function MessageThread({ conversation, agentId, onBack }: MessageThreadProps) {
+export function MessageThread({
+  conversation,
+  agentId,
+  onBack,
+  headerExtras,
+  aboveMessages,
+}: MessageThreadProps) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -96,6 +106,7 @@ export function MessageThread({ conversation, agentId, onBack }: MessageThreadPr
             <CheckCircle2 className="h-3 w-3" /> Convertido
           </Badge>
         )}
+        {headerExtras}
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">IA</span>
           <Switch
@@ -104,6 +115,8 @@ export function MessageThread({ conversation, agentId, onBack }: MessageThreadPr
           />
         </div>
       </div>
+
+      {aboveMessages}
 
       {/* Mensagens */}
       <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto bg-muted/30 p-4">

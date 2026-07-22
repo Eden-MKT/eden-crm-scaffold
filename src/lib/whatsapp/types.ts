@@ -1,6 +1,12 @@
 import type { Database } from "@/integrations/supabase/types";
 
-type AgentRow = Database["public"]["Tables"]["whatsapp_agents"]["Row"];
+// As colunas monday_* ficam de fora do que o front lê: monday_token é segredo
+// do cliente e só as Edge Functions (service role) devem enxergá-lo. Manter o
+// Omit aqui faz o type-check acusar se alguém voltar a selecioná-las no painel.
+type AgentRow = Omit<
+  Database["public"]["Tables"]["whatsapp_agents"]["Row"],
+  "monday_enabled" | "monday_board_id" | "monday_group_map" | "monday_token"
+>;
 type ConversationRow = Database["public"]["Tables"]["whatsapp_conversations"]["Row"];
 type MessageRow = Database["public"]["Tables"]["whatsapp_messages"]["Row"];
 
@@ -58,6 +64,70 @@ export const DEFAULT_AGENDA_HOURS: AgendaHours = {
   lunch: { enabled: true, start: "12:00", end: "13:00" },
 };
 
+// ---- Capacidades do agente único — configs por agente ----
+
+// "Serviços e valores" (aba Básico) — fonte de verdade de oferta/preço da IA.
+export interface KnowledgeItem {
+  nome: string;
+  descricao: string;
+  valor: string;
+}
+
+// Objeções que a IA reconhece + vídeo opcional (aba Objeções).
+// Nomes de campo espelham o backend (_shared/objection.ts): tipo, video_url, gatilhos.
+export interface ObjectionConfigItem {
+  tipo: string; // slug único, minúsculo, sem espaço (ex.: "financeira")
+  rotulo: string; // nome amigável (ex.: "Preço / investimento")
+  gatilhos: string[]; // palavras-dica (ex.: ["caro", "não posso pagar"])
+  video_url: string; // URL do vídeo (vazio = só responde por texto)
+  abordagem: string; // como a IA responde
+}
+
+// Handoff: telefone(s) do atendente humano notificado quando a IA transfere.
+export interface HandoffConfig {
+  telefones: string[];
+}
+
+export const DEFAULT_HANDOFF_CONFIG: HandoffConfig = { telefones: [] };
+
+export interface FollowupStageConfig {
+  aposMinutos: number;
+  tom: string;
+}
+
+export interface FollowupConfig {
+  enabled: boolean;
+  /** Confirmação de consulta na véspera (~9h) — só faz efeito com agenda ativa. */
+  confirmEnabled: boolean;
+  estagios: FollowupStageConfig[];
+}
+
+// Cadência padrão: 12h → 24h → 48h (a IA avalia a conversa antes de insistir).
+export const DEFAULT_FOLLOWUP_CONFIG: FollowupConfig = {
+  enabled: false,
+  confirmEnabled: true,
+  estagios: [
+    { aposMinutos: 720, tom: "leve — presuma que a pessoa se distraiu" },
+    { aposMinutos: 1440, tom: "respeitoso — retomada educada" },
+    { aposMinutos: 2880, tom: "último contato — gentil, deixe a porta aberta" },
+  ],
+};
+
+export type LeadTemperature = "hot" | "warm" | "cold";
+export type LeadStatus = "em_atendimento" | "qualificado" | "desqualificado";
+
+// Ficha de paciente (tabela patients) — criada/atualizada pela IA.
+export interface Patient {
+  id: string;
+  clientId: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WhatsappAgent {
   id: string;
   clientId: string;
@@ -85,6 +155,10 @@ export interface WhatsappAgent {
   agendaHours: AgendaHours;
   agendaServices: AgentService[];
   promptInjectionEnabled: boolean;
+  knowledgeItems: KnowledgeItem[];
+  objectionConfig: ObjectionConfigItem[];
+  handoffConfig: HandoffConfig;
+  followupConfig: FollowupConfig;
   createdAt: string;
   updatedAt: string;
 }
@@ -101,6 +175,18 @@ export interface WhatsappConversation {
   converted: boolean;
   convertedAt: string | null;
   unreadCount: number;
+  patientId: string | null;
+  leadInterest: string | null;
+  contextSummary: string | null;
+  leadTemperature: LeadTemperature | null;
+  conversionProbability: number | null;
+  analysisSummary: string | null;
+  leadStatus: LeadStatus;
+  analyzedAt: string | null;
+  followupStage: number;
+  lastFollowupAt: string | null;
+  followupExhausted: boolean;
+  humanTakeover: boolean;
   createdAt: string;
 }
 
@@ -141,6 +227,59 @@ function parseHours(raw: unknown): AgendaHours {
   return DEFAULT_AGENDA_HOURS;
 }
 
+// Parsers tolerantes dos jsonb de config (jsonb {} → defaults completos).
+function parseJsonObject<T extends object>(raw: unknown, defaults: T): T {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    return { ...defaults, ...(raw as Partial<T>) };
+  }
+  return defaults;
+}
+
+function parseKnowledgeItems(raw: unknown): KnowledgeItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((i): i is Record<string, unknown> => typeof i === "object" && i !== null)
+    .map((i) => ({
+      nome: String(i.nome ?? ""),
+      descricao: String(i.descricao ?? ""),
+      valor: String(i.valor ?? ""),
+    }));
+}
+
+function parseObjectionConfig(raw: unknown): ObjectionConfigItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((i): i is Record<string, unknown> => typeof i === "object" && i !== null)
+    .map((i) => ({
+      tipo: String(i.tipo ?? ""),
+      rotulo: String(i.rotulo ?? ""),
+      gatilhos: Array.isArray(i.gatilhos) ? i.gatilhos.map((g) => String(g)) : [],
+      video_url: String(i.video_url ?? ""),
+      abordagem: String(i.abordagem ?? ""),
+    }));
+}
+
+function parseHandoffConfig(raw: unknown): HandoffConfig {
+  const base = parseJsonObject(raw, DEFAULT_HANDOFF_CONFIG);
+  return {
+    telefones: Array.isArray(base.telefones) ? base.telefones.map(String).filter(Boolean) : [],
+  };
+}
+
+function parseFollowupConfig(raw: unknown): FollowupConfig {
+  const base = parseJsonObject(raw, DEFAULT_FOLLOWUP_CONFIG);
+  const estagios = Array.isArray(base.estagios) ? base.estagios : [];
+  return {
+    enabled: base.enabled === true,
+    confirmEnabled: base.confirmEnabled !== false,
+    estagios: DEFAULT_FOLLOWUP_CONFIG.estagios.map((d, i) => ({
+      aposMinutos:
+        Number(estagios[i]?.aposMinutos) > 0 ? Number(estagios[i]?.aposMinutos) : d.aposMinutos,
+      tom: String(estagios[i]?.tom ?? "").trim() || d.tom,
+    })),
+  };
+}
+
 export function mapAgent(row: AgentRow): WhatsappAgent {
   return {
     id: row.id,
@@ -169,6 +308,10 @@ export function mapAgent(row: AgentRow): WhatsappAgent {
     agendaHours: parseHours(row.agenda_hours),
     agendaServices: parseServices(row.agenda_services),
     promptInjectionEnabled: row.prompt_injection_enabled ?? true,
+    knowledgeItems: parseKnowledgeItems(row.knowledge_items),
+    objectionConfig: parseObjectionConfig(row.objection_config),
+    handoffConfig: parseHandoffConfig(row.handoff_config),
+    followupConfig: parseFollowupConfig(row.followup_config),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -187,6 +330,18 @@ export function mapConversation(row: ConversationRow): WhatsappConversation {
     converted: row.converted,
     convertedAt: row.converted_at,
     unreadCount: row.unread_count,
+    patientId: row.patient_id ?? null,
+    leadInterest: row.lead_interest ?? null,
+    contextSummary: row.context_summary ?? null,
+    leadTemperature: (row.lead_temperature as LeadTemperature | null) ?? null,
+    conversionProbability: row.conversion_probability ?? null,
+    analysisSummary: row.analysis_summary ?? null,
+    leadStatus: (row.lead_status as LeadStatus) ?? "em_atendimento",
+    analyzedAt: row.analyzed_at ?? null,
+    followupStage: row.followup_stage ?? 0,
+    lastFollowupAt: row.last_followup_at ?? null,
+    followupExhausted: row.followup_exhausted ?? false,
+    humanTakeover: row.human_takeover ?? false,
     createdAt: row.created_at,
   };
 }

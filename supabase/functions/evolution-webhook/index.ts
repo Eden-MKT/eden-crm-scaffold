@@ -16,11 +16,21 @@ import {
   freeSlots,
   resolveService,
   utcToZonedParts,
+  weekdayLabelPtBr,
   zonedToUtc,
   type AgendaHours,
   type AgentService,
 } from "../_shared/agenda.ts";
 import { buildSystemPrompt, handleVerificar, toolsForAgent } from "../_shared/ai-core.ts";
+import {
+  buildHandoffNotification,
+  buildPatientBlock,
+  handoffPhones,
+  type PatientRecord,
+} from "../_shared/capabilities.ts";
+import { registrarObjecao, registrarTentativaVideo } from "../_shared/objection.ts";
+import { resolveLeadPhone } from "../_shared/phone.ts";
+import { syncMonday } from "../_shared/monday.ts";
 
 const DEBOUNCE_MS = 15000; // fallback quando o agente não tem response_delay_seconds
 const HISTORY = 40;
@@ -65,6 +75,16 @@ Deno.serve(async (req) => {
     }
     if (event === "messages.upsert") {
       await handleMessage(db, instance, data);
+      return json({ ok: true });
+    }
+    if (event === "messages.update") {
+      // Ack de entrega/leitura chegou PELO socket da sessão = prova de vida
+      // (sessão surda não recebe ack nenhum). Confirma o canário do
+      // connection-health e zera o contador de falhas.
+      await db
+        .from("whatsapp_agents")
+        .update({ last_canary_ok_at: new Date().toISOString(), canary_fails: 0 })
+        .eq("instance_name", instance);
       return json({ ok: true });
     }
     // qrcode.updated e outros: ignorados (QR é buscado sob demanda pelo painel).
@@ -229,6 +249,7 @@ async function handleMessage(db: DB, instance: string, data: Record<string, unkn
   const remoteJid = String(key.remoteJid ?? "");
   const fromMe = Boolean(key.fromMe);
   const evolutionId = key.id ? String(key.id) : null;
+  const leadPhone = resolveLeadPhone(data, remoteJid);
 
   // Filtra grupos, status, newsletter — só conversas 1:1.
   if (!remoteJid.endsWith("@s.whatsapp.net") && !remoteJid.endsWith("@lid")) return;
@@ -239,6 +260,33 @@ async function handleMessage(db: DB, instance: string, data: Record<string, unkn
     .eq("instance_name", instance)
     .maybeSingle();
   if (!agent) return;
+
+  // Self-chat (mensagem da instância para o próprio número) nunca é lead.
+  // O canário do connection-health ecoa aqui, provando que a sessão RECEBE
+  // eventos (connectionState "open" não garante isso — sessão surda).
+  const ownPhone = String(agent.phone_number ?? "");
+  if (ownPhone && remoteJid === `${ownPhone}@s.whatsapp.net`) {
+    // deno-lint-ignore no-explicit-any
+    const selfText = String((data.message as any)?.conversation ?? "");
+    if (fromMe && selfText.startsWith("[canary")) {
+      await db
+        .from("whatsapp_agents")
+        .update({ last_canary_ok_at: new Date().toISOString(), canary_fails: 0 })
+        .eq("id", agent.id);
+      if (evolutionId) {
+        try {
+          await evo.deleteMessageForEveryone(instance, {
+            id: evolutionId,
+            remoteJid,
+            fromMe: true,
+          });
+        } catch {
+          /* melhor esforço — só limpeza visual do self-chat */
+        }
+      }
+    }
+    return;
+  }
 
   const conv = await getOrCreateConversation(db, instance, agent.id, remoteJid, data);
 
@@ -294,21 +342,51 @@ async function handleMessage(db: DB, instance: string, data: Record<string, unkn
   }
 
   // Mantém o nome do contato atualizado com o pushName do WhatsApp.
+  // Lead respondeu → cadência de follow-up recomeça do zero.
   const pushName = String((data as { pushName?: string }).pushName ?? "").trim();
   const convUpdate: Record<string, unknown> = {
     last_message_at: sentAt,
     last_message_preview: preview,
     last_inbound_message_id: inserted.id,
     unread_count: (conv.unread_count ?? 0) + 1,
+    followup_stage: 0,
+    last_followup_at: null,
+    followup_exhausted: false,
   };
-  if (pushName) convUpdate.contact_name = pushName;
+  if (pushName && !conv.contact_name) convUpdate.contact_name = pushName;
   await db.from("whatsapp_conversations").update(convUpdate).eq("id", conv.id);
 
-  if (agent.ai_enabled && !conv.ai_paused) {
+  // Confirmação de leitura humanizada: check azul após 2–8s aleatórios (o
+  // readMessages automático da instância fica OFF — visto instantâneo em
+  // qualquer horário denuncia robô).
+  if (evolutionId) {
+    const readDelay = 2000 + Math.random() * 6000;
+    // deno-lint-ignore no-explicit-any
+    (globalThis as any).EdgeRuntime?.waitUntil(
+      (async () => {
+        await new Promise((r) => setTimeout(r, readDelay));
+        await evo.markMessageAsRead(instance, [
+          { id: evolutionId, fromMe: false, remoteJid },
+        ]);
+      })().catch((e: unknown) => console.error("markAsRead error", e)),
+    );
+  }
+
+  // Agente sem instrução configurada responderia como um assistente genérico —
+  // sem persona, sem preços, sem funil — e queimaria o primeiro contato do
+  // cliente. Melhor ficar em silêncio até alguém preencher o prompt.
+  const temPrompt = String(agent.system_prompt ?? "").trim().length > 0;
+  if (agent.ai_enabled && !temPrompt) {
+    console.warn(
+      `IA ligada sem system_prompt — nenhuma resposta enviada (agent=${agent.id}, instance=${instance})`,
+    );
+  }
+
+  if (agent.ai_enabled && temPrompt && !conv.ai_paused && !conv.human_takeover) {
     // Responde 200 já; pipeline roda em background com debounce.
     // deno-lint-ignore no-explicit-any
     (globalThis as any).EdgeRuntime?.waitUntil(
-      runPipeline(db, agent, conv.id, remoteJid, inserted.id),
+      runPipeline(db, agent, conv.id, remoteJid, inserted.id, leadPhone),
     );
   }
 }
@@ -322,7 +400,7 @@ async function getOrCreateConversation(
 ) {
   const { data: existing } = await db
     .from("whatsapp_conversations")
-    .select("id, ai_paused, unread_count")
+    .select("id, ai_paused, unread_count, contact_name, human_takeover")
     .eq("agent_id", agentId)
     .eq("remote_jid", remoteJid)
     .maybeSingle();
@@ -347,13 +425,13 @@ async function getOrCreateConversation(
       contact_name: pushName || null,
       profile_pic_url: profilePic,
     })
-    .select("id, ai_paused, unread_count")
+    .select("id, ai_paused, unread_count, contact_name, human_takeover")
     .single();
   if (error) {
     // Corrida: outra invocação criou — re-seleciona.
     const { data: again } = await db
       .from("whatsapp_conversations")
-      .select("id, ai_paused, unread_count")
+      .select("id, ai_paused, unread_count, contact_name, human_takeover")
       .eq("agent_id", agentId)
       .eq("remote_jid", remoteJid)
       .single();
@@ -369,6 +447,8 @@ async function handleAgendar(
   conversationId: string,
   remoteJid: string,
   argsJson: string,
+  /** Telefone real do lead; null quando não foi possível resolver (@lid). */
+  leadPhone: string | null,
 ) {
   let args: { data?: string; hora?: string; servico?: string; nome_paciente?: string } = {};
   try {
@@ -404,7 +484,7 @@ async function handleAgendar(
     durationMin: service.durationMin,
     serviceLabel: service.label,
     patientName: args.nome_paciente ?? null,
-    patientPhone: remoteJid.split("@")[0] || null,
+    patientPhone: leadPhone,
     source: "ai",
     ignoreAppointmentId: existing?.id ?? null,
   });
@@ -434,7 +514,13 @@ async function handleAgendar(
   const local = utcToZonedParts(startsAt, tz);
   return {
     ok: true,
-    confirmado: { data: local.dateISO, hora: local.time, servico: service.label },
+    confirmado: {
+      data: local.dateISO,
+      // Vai pronto para a IA não errar o dia ao confirmar com o paciente.
+      dia_semana: weekdayLabelPtBr(local.dateISO, tz),
+      hora: local.time,
+      servico: service.label,
+    },
     ...(remarcadoDe
       ? {
           remarcado: true,
@@ -451,6 +537,8 @@ async function runPipeline(
   conversationId: string,
   remoteJid: string,
   triggerMessageId: string,
+  /** Telefone real do lead (null quando o JID é @lid e não há alternativa). */
+  leadPhone: string | null,
 ) {
   // Buffer configurável por agente (padrão 15s) — tempo de silêncio antes de responder.
   const delaySec = Number(agent.response_delay_seconds);
@@ -464,22 +552,58 @@ async function runPipeline(
   });
   if (!claimed) return;
 
+  // "digitando…" durante toda a geração (buffer + OpenAI + tools) — sem isso o
+  // lead vê silêncio na parte mais longa. Fire-and-forget: a Evolution segura a
+  // request pelo tempo do delay, então NÃO aguardamos (não atrasa a resposta).
+  evo.sendPresence(String(agent.instance_name), remoteJid, 15000).catch(() => {
+    /* presença é cosmética */
+  });
+
   try {
-    // Dados do contato (do WhatsApp) para personalizar sem inventar nome.
+    // Dados do contato + ficha do paciente (novo vs antigo).
     const { data: conv } = await db
       .from("whatsapp_conversations")
-      .select("contact_name")
+      .select(
+        "contact_name, context_summary, patient_id, human_takeover, objections_handled, lead_temperature, conversion_probability",
+      )
       .eq("id", conversationId)
       .maybeSingle();
     const contact = {
       name: conv?.contact_name ?? null,
-      phone: remoteJid.split("@")[0] || null,
+      phone: leadPhone,
     };
+
+    // Ficha: pelo vínculo da conversa ou pelo telefone (auto-vincula se achar).
+    let patient: PatientRecord | null = null;
+    if (conv?.patient_id) {
+      const { data: p } = await db
+        .from("patients")
+        .select("id, name, phone, email, notes")
+        .eq("id", conv.patient_id)
+        .maybeSingle();
+      patient = p ?? null;
+    }
+    if (!patient && contact.phone) {
+      const { data: p } = await db
+        .from("patients")
+        .select("id, name, phone, email, notes")
+        .eq("client_id", String(agent.client_id))
+        .eq("phone", contact.phone)
+        .maybeSingle();
+      if (p) {
+        patient = p;
+        await db
+          .from("whatsapp_conversations")
+          .update({ patient_id: p.id })
+          .eq("id", conversationId);
+      }
+    }
+    const patientBlock = buildPatientBlock(patient);
 
     // Agendamentos deste contato (últimos 30 dias + futuros) — a IA precisa saber
     // deles para não tratar o horário do próprio cliente como conflito/duplicar.
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const phone = remoteJid.split("@")[0] || "";
+    const phone = leadPhone ?? "";
     let apptQuery = db
       .from("appointments")
       .select("starts_at, service_label, status, conversation_id, patient_phone")
@@ -508,7 +632,10 @@ async function runPipeline(
 
     const model = String(agent.model ?? "gpt-4o-mini");
     const messages: ChatMessage[] = [
-      { role: "system", content: buildSystemPrompt(agent, contact, contactAppointments) },
+      {
+        role: "system",
+        content: buildSystemPrompt(agent, contact, contactAppointments, patientBlock, conv),
+      },
       ...ordered.map((m: { sender: string; content: string | null }) => ({
         role: (m.sender === "contact" ? "user" : "assistant") as "user" | "assistant",
         content: m.content ?? "",
@@ -517,6 +644,17 @@ async function runPipeline(
 
     const agendaOn = agent.agenda_enabled === true;
     const tools = toolsForAgent(agent);
+
+    // Vídeo de objeção a intercalar entre as bolhas nesta rodada (se houver).
+    let objecaoVideo: { url: string; tipo: string } | null = null;
+    const objsHandled = (conv?.objections_handled ?? {}) as Record<
+      string,
+      {
+        detectada?: boolean;
+        video_enviado?: boolean;
+        at?: string;
+      }
+    >;
 
     let finalText: string | null = null;
     // 4 iterações: permite verificar_disponibilidade -> agendar no mesmo turno.
@@ -561,7 +699,173 @@ async function runPipeline(
           } else if (tc.name === "verificar_disponibilidade" && agendaOn) {
             result = await handleVerificar(db, agent, tc.arguments, conversationId);
           } else if (tc.name === "agendar" && agendaOn) {
-            result = await handleAgendar(db, agent, conversationId, remoteJid, tc.arguments);
+            result = await handleAgendar(
+              db,
+              agent,
+              conversationId,
+              remoteJid,
+              tc.arguments,
+              leadPhone,
+            );
+          } else if (tc.name === "cadastrar_paciente") {
+            let args: { nome?: string; email?: string; observacoes?: string } = {};
+            try {
+              args = JSON.parse(tc.arguments || "{}");
+            } catch {
+              /* ignora */
+            }
+            const nome = (args.nome ?? "").trim();
+            if (!nome) {
+              result = { ok: false, erro: "Informe o nome do paciente." };
+            } else if (patient) {
+              result = { ok: true, ja_cadastrado: true, ficha: { nome: patient.name } };
+            } else {
+              const { data: created, error } = await db
+                .from("patients")
+                .upsert(
+                  {
+                    client_id: String(agent.client_id),
+                    name: nome,
+                    phone: contact.phone ?? "",
+                    email: (args.email ?? "").trim() || null,
+                    notes: (args.observacoes ?? "").trim() || null,
+                  },
+                  { onConflict: "client_id,phone" },
+                )
+                .select("id, name, phone, email, notes")
+                .single();
+              if (error || !created) {
+                result = { ok: false, erro: "Não foi possível cadastrar agora." };
+              } else {
+                patient = created;
+                await db
+                  .from("whatsapp_conversations")
+                  .update({ patient_id: created.id, contact_name: contact.name ?? nome })
+                  .eq("id", conversationId);
+                result = { ok: true, cadastrado: true };
+              }
+            }
+          } else if (tc.name === "atualizar_paciente") {
+            let args: { nome?: string; email?: string; observacoes?: string } = {};
+            try {
+              args = JSON.parse(tc.arguments || "{}");
+            } catch {
+              /* ignora */
+            }
+            if (!patient) {
+              result = {
+                ok: false,
+                erro: "Paciente ainda não cadastrado — use cadastrar_paciente.",
+              };
+            } else {
+              const patch: Record<string, unknown> = {};
+              if ((args.nome ?? "").trim()) patch.name = String(args.nome).trim();
+              if ((args.email ?? "").trim()) patch.email = String(args.email).trim();
+              if ((args.observacoes ?? "").trim()) {
+                const stamp = new Date().toLocaleDateString("pt-BR");
+                patch.notes = [patient.notes, `[${stamp}] ${String(args.observacoes).trim()}`]
+                  .filter(Boolean)
+                  .join("\n");
+              }
+              if (Object.keys(patch).length) {
+                await db.from("patients").update(patch).eq("id", patient.id);
+                patient = { ...patient, ...(patch as Partial<PatientRecord>) };
+              }
+              result = { ok: true, atualizado: true };
+            }
+          } else if (tc.name === "encaminhar_humano") {
+            let args: { motivo?: string } = {};
+            try {
+              args = JSON.parse(tc.arguments || "{}");
+            } catch {
+              /* ignora */
+            }
+            await db
+              .from("whatsapp_conversations")
+              .update({
+                human_takeover: true,
+                human_takeover_at: new Date().toISOString(),
+                ai_paused: true,
+              })
+              .eq("id", conversationId);
+            const notice = buildHandoffNotification(
+              agent,
+              { contact_name: contact.name, remote_jid: remoteJid },
+              conv?.context_summary ?? null,
+              args.motivo,
+            );
+            for (const tel of handoffPhones(agent)) {
+              const digits = tel.replace(/\D/g, "");
+              if (!digits) continue;
+              try {
+                await evo.sendText(
+                  String(agent.instance_name),
+                  `${digits}@s.whatsapp.net`,
+                  notice,
+                  0,
+                );
+              } catch (e) {
+                console.error("handoff notify error", e);
+              }
+            }
+            result = {
+              ok: true,
+              instrucao:
+                "Avise ao lead, com simpatia e em uma frase, que a pessoa responsável vai assumir a conversa por aqui. Esta é sua última mensagem — o humano assume a partir daqui.",
+            };
+          } else if (tc.name === "confirmar_presenca" && agendaOn) {
+            const { data: next } = await db
+              .from("appointments")
+              .select("id, starts_at")
+              .eq("conversation_id", conversationId)
+              .eq("status", "scheduled")
+              .gte("ends_at", new Date().toISOString())
+              .order("starts_at", { ascending: true })
+              .limit(1)
+              .maybeSingle();
+            if (!next) {
+              result = { ok: false, erro: "Nenhum agendamento futuro para confirmar." };
+            } else {
+              await db.from("appointments").update({ confirmed: true }).eq("id", next.id);
+              result = { ok: true, confirmado: true };
+            }
+          } else if (tc.name === "cancelar_consulta" && agendaOn) {
+            const { data: next } = await db
+              .from("appointments")
+              .select("id, starts_at")
+              .eq("conversation_id", conversationId)
+              .eq("status", "scheduled")
+              .gte("ends_at", new Date().toISOString())
+              .order("starts_at", { ascending: true })
+              .limit(1)
+              .maybeSingle();
+            if (!next) {
+              result = { ok: false, erro: "Nenhum agendamento futuro para cancelar." };
+            } else {
+              await db.from("appointments").update({ status: "cancelled" }).eq("id", next.id);
+              result = {
+                ok: true,
+                cancelado: true,
+                instrucao:
+                  "Confirme o cancelamento com empatia e ofereça remarcar quando fizer sentido.",
+              };
+            }
+          } else if (tc.name === "detectar_objecao") {
+            try {
+              const { tipo } = JSON.parse(tc.arguments || "{}");
+              const dec = await registrarObjecao(db, {
+                conversationId,
+                agent,
+                objectionsHandled: objsHandled,
+                tipo: String(tipo),
+              });
+              if (dec.enviar_video && dec.video_url) {
+                objecaoVideo = { url: dec.video_url, tipo: String(tipo) };
+              }
+              result = dec;
+            } catch {
+              result = { ok: false, reason: "erro" };
+            }
           }
           messages.push({
             role: "tool",
@@ -607,7 +911,8 @@ async function runPipeline(
       : null;
 
     const bubbles = splitBubbles(finalText);
-    for (const bubble of bubbles) {
+    for (let i = 0; i < bubbles.length; i++) {
+      const bubble = bubbles[i];
       // Abort-no-meio: se o cliente mandou algo novo enquanto a IA envia as
       // bolhas, para tudo — a invocação da mensagem nova responde com contexto
       // completo (evita terminar uma resposta já desatualizada).
@@ -640,7 +945,96 @@ async function runPipeline(
         .from("whatsapp_conversations")
         .update({ last_message_at: now, last_message_preview: bubble.slice(0, 120) })
         .eq("id", conversationId);
+
+      // Vídeo de objeção: enviar após a 1ª bolha (acolhimento), antes do fechamento.
+      if (objecaoVideo && i === 0) {
+        let enviado = false;
+        let erroVideo: string | undefined;
+        try {
+          const vr = (await evo.sendMedia(String(agent.instance_name), remoteJid, {
+            mediatype: "video",
+            media: objecaoVideo.url,
+            fileName: `objecao_${objecaoVideo.tipo}.mp4`,
+            delay: 1200,
+          })) as { key?: { id?: string } };
+          await db.from("whatsapp_messages").insert({
+            conversation_id: conversationId,
+            direction: "out",
+            sender: "ai",
+            message_type: "video",
+            content: objecaoVideo.url,
+            evolution_id: vr.key?.id ?? null,
+            sent_at: new Date().toISOString(),
+          });
+          enviado = true;
+        } catch (e) {
+          erroVideo = String(e);
+          // Falha aqui é silenciosa para o lead — por isso precisa gritar no log
+          // com a URL, que costuma ser a causa (arquivo removido do host).
+          console.error(
+            `sendMedia objecao FALHOU tipo=${objecaoVideo.tipo} url=${objecaoVideo.url} conv=${conversationId}`,
+            e,
+          );
+        }
+        // Registra a tentativa nos dois casos: sem isso, uma falha deixaria a
+        // trava desarmada e a IA reagiria à mesma objeção indefinidamente.
+        await registrarTentativaVideo(db, conversationId, objsHandled, objecaoVideo.tipo, {
+          enviado,
+          erro: erroVideo,
+        });
+        objecaoVideo = null; // envia só 1x nesta rodada
+      }
     }
+
+    // ShortMemory: atualiza o resumo da conversa (barato, todo agente) —
+    // alimenta análise, follow-ups e o painel Markei.
+    {
+      try {
+        const recent = ordered.slice(-12) as { sender: string; content: string | null }[];
+        const transcript = recent
+          .map((m) => `${m.sender === "contact" ? "Lead" : "Atendente"}: ${m.content ?? ""}`)
+          .join("\n");
+        const s = await chat({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content:
+                "Atualize o resumo curto (máx. 4 frases, PT-BR) do estado desta conversa de atendimento: quem é o lead, interesse, objeções, o que falta para converter. Responda SÓ com o resumo.",
+            },
+            {
+              role: "user",
+              content: `Resumo anterior: ${conv?.context_summary ?? "(nenhum)"}\n\nÚltimas mensagens:\n${transcript}\n\nResposta enviada agora: ${finalText}`,
+            },
+          ],
+          temperature: 0.2,
+          maxTokens: 160,
+        });
+        if (s.content?.trim()) {
+          await db
+            .from("whatsapp_conversations")
+            .update({ context_summary: s.content.trim() })
+            .eq("id", conversationId);
+        }
+        await logUsage(
+          db,
+          String(agent.id),
+          conversationId,
+          "summary",
+          "gpt-4o-mini",
+          s.promptTokens,
+          s.completionTokens,
+          chatCostUsd("gpt-4o-mini", s.promptTokens, s.completionTokens),
+        );
+      } catch (e) {
+        console.error("summary error", e);
+      }
+    }
+
+    // Monday: sincroniza o card do lead (pós-resposta, atrás de monday_enabled).
+    // Roda após o resumo para o Contexto do card já refletir o estado atual.
+    // Falha isolada dentro de syncMonday — nunca quebra o atendimento.
+    await syncMonday(db, agent, conversationId, leadPhone);
   } finally {
     await db
       .from("whatsapp_conversations")

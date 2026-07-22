@@ -23,7 +23,9 @@ export interface Appointment {
 const APPT_COLS =
   "id, client_id, agent_id, conversation_id, patient_name, patient_phone, service_label, duration_min, starts_at, ends_at, status, source, notes, created_at";
 
-export function mapAppointment(row: AppointmentRow): Appointment {
+export function mapAppointment(
+  row: Omit<AppointmentRow, "confirmed" | "confirmation_sent_at">,
+): Appointment {
   return {
     id: row.id,
     clientId: row.client_id,

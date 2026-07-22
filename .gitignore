@@ -35,3 +35,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Fork de referência (projeto Markei) — não versionar no repo da Éden
+agent-insight-dashboard/

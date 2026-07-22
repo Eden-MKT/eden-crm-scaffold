@@ -18,9 +18,16 @@ interface ConversationListProps {
   conversations: WhatsappConversation[];
   selectedId: string | null;
   onSelect: (c: WhatsappConversation) => void;
+  /** Badges extras por item (ex.: painel Markei) — renderizados abaixo do preview. */
+  itemBadges?: (c: WhatsappConversation) => React.ReactNode;
 }
 
-export function ConversationList({ conversations, selectedId, onSelect }: ConversationListProps) {
+export function ConversationList({
+  conversations,
+  selectedId,
+  onSelect,
+  itemBadges,
+}: ConversationListProps) {
   const [q, setQ] = useState("");
   const filtered = conversations.filter((c) =>
     contactLabel(c).toLowerCase().includes(q.toLowerCase()),
@@ -74,6 +81,7 @@ export function ConversationList({ conversations, selectedId, onSelect }: Conver
                     {c.lastMessagePreview ?? "—"}
                   </span>
                 </div>
+                {itemBadges?.(c)}
               </div>
               {c.unreadCount > 0 && (
                 <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">

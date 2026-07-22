@@ -1,5 +1,6 @@
 import { admin } from "../_shared/db.ts";
 import { corsHeaders, json, preflight } from "../_shared/cors.ts";
+import { requireStaff, requireStaffOrMarkei } from "../_shared/portal.ts";
 import * as evo from "../_shared/evolution.ts";
 
 const WEBHOOK_URL = `${Deno.env.get("SUPABASE_URL")}/functions/v1/evolution-webhook`;
@@ -20,15 +21,6 @@ Deno.serve(async (req) => {
 
   const db = admin();
 
-  // Validação de sessão in-function (verify_jwt do gateway não é confiável
-  // com as novas publishable keys).
-  const token = req.headers.get("Authorization")?.replace("Bearer ", "");
-  const {
-    data: { user },
-    error: authError,
-  } = await db.auth.getUser(token ?? "");
-  if (authError || !user) return json({ error: "Unauthorized" }, 401);
-
   let payload: { action?: string; [k: string]: unknown };
   try {
     payload = await req.json();
@@ -36,6 +28,16 @@ Deno.serve(async (req) => {
     return json({ error: "Invalid JSON" }, 400);
   }
   const action = payload.action;
+
+  // Guard por ação: gerenciar instâncias é exclusivo do staff (Imperius);
+  // enviar mensagem manual também é permitido ao papel markei (donos).
+  if (action === "send_manual") {
+    const ctx = await requireStaffOrMarkei(db, req);
+    if (!ctx) return json({ error: "Unauthorized" }, 401);
+  } else {
+    const staff = await requireStaff(db, req);
+    if (!staff) return json({ error: "Unauthorized" }, 401);
+  }
 
   try {
     switch (action) {
@@ -69,17 +71,36 @@ Deno.serve(async (req) => {
 
       case "qr": {
         const agentId = String(payload.agentId);
+        const number = payload.number ? String(payload.number).replace(/\D/g, "") : undefined;
         const { data: agent } = await db
           .from("whatsapp_agents")
           .select("instance_name")
           .eq("id", agentId)
           .single();
         if (!agent?.instance_name) return json({ error: "No instance" }, 400);
-        const r = (await evo.connectInstance(agent.instance_name)) as {
+        // Auto-recuperação: instância com sessão zumbi (credenciais antigas +
+        // socket morto) faz o celular recusar o QR. Recria limpa quando preciso.
+        const recreated = await evo.ensureCleanInstance({
+          instanceName: agent.instance_name,
+          webhookUrl: WEBHOOK_URL,
+          webhookToken: WEBHOOK_TOKEN(),
+        });
+        if (recreated) {
+          await db
+            .from("whatsapp_agents")
+            .update({ status: "connecting", phone_number: null })
+            .eq("id", agentId);
+        }
+        const r = (await evo.connectInstance(agent.instance_name, number)) as {
           base64?: string;
           code?: string;
+          pairingCode?: string;
         };
-        return json({ base64: r.base64 ?? null, code: r.code ?? null });
+        return json({
+          base64: r.base64 ?? null,
+          code: r.code ?? null,
+          pairingCode: r.pairingCode ?? null,
+        });
       }
 
       case "status": {
@@ -89,16 +110,12 @@ Deno.serve(async (req) => {
           .select("instance_name")
           .eq("id", agentId)
           .single();
-        if (!agent?.instance_name)
-          return json({ status: "disconnected" });
+        if (!agent?.instance_name) return json({ status: "disconnected" });
         const r = (await evo.connectionState(agent.instance_name)) as {
           instance?: { state?: string };
         };
         const status = mapState(r.instance?.state ?? "close");
-        await db
-          .from("whatsapp_agents")
-          .update({ status })
-          .eq("id", agentId);
+        await db.from("whatsapp_agents").update({ status }).eq("id", agentId);
         return json({ status });
       }
 
@@ -165,12 +182,9 @@ Deno.serve(async (req) => {
           .single();
         if (!agent?.instance_name) return json({ error: "No instance" }, 400);
 
-        const r = (await evo.sendText(
-          agent.instance_name,
-          conv.remote_jid,
-          text,
-          0,
-        )) as { key?: { id?: string } };
+        const r = (await evo.sendText(agent.instance_name, conv.remote_jid, text, 0)) as {
+          key?: { id?: string };
+        };
         const now = new Date().toISOString();
         await db.from("whatsapp_messages").insert({
           conversation_id: conversationId,

@@ -290,3 +290,163 @@
     scroll-behavior: auto !important;
   }
 }
+
+/*
+ * Tela de login — animações da experiência "sala de controle viva".
+ * Escopadas em .login-* para não vazar para o resto do app.
+ * (Portado do painel de gestão; cores vêm dos tokens azuis da Éden.)
+ */
+@layer components {
+  /* Entrada orquestrada: elementos sobem+aparecem, escalonados via --d. */
+  .login-rise {
+    opacity: 0;
+    transform: translateY(16px);
+    animation: login-rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: var(--d, 0ms);
+  }
+  @keyframes login-rise-in {
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Aura girando atrás do card — assinatura "IA ativa". */
+  .login-aura::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: conic-gradient(
+      from var(--a, 0deg),
+      transparent 0deg,
+      color-mix(in oklab, var(--brand-light) 90%, transparent) 70deg,
+      transparent 150deg,
+      transparent 210deg,
+      color-mix(in oklab, var(--brand) 80%, transparent) 280deg,
+      transparent 360deg
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: login-spin 6s linear infinite;
+    pointer-events: none;
+  }
+  @property --a {
+    syntax: "<angle>";
+    inherits: false;
+    initial-value: 0deg;
+  }
+  @keyframes login-spin {
+    to {
+      --a: 360deg;
+    }
+  }
+
+  /* Halo pulsante suave sob o card. */
+  .login-halo {
+    animation: login-halo-pulse 5s ease-in-out infinite;
+  }
+  @keyframes login-halo-pulse {
+    0%,
+    100% {
+      opacity: 0.5;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.85;
+      transform: scale(1.06);
+    }
+  }
+
+  /* Logo com leve flutuação (respiro). */
+  .login-float {
+    animation: login-float-y 6s ease-in-out infinite;
+  }
+  @keyframes login-float-y {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-5px);
+    }
+  }
+
+  /*
+   * Cena de chat WhatsApp (painel esquerdo do login). O stream é controlado
+   * por JS (fila de conversas variadas); aqui só a ANIMAÇÃO DE ENTRADA de
+   * cada bolha nova (sobe + aparece uma vez).
+   */
+  .bubble-in {
+    animation: bubble-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  @keyframes bubble-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* Contadores/estatísticas que sobem suave (coluna esquerda). */
+  .stat-rise {
+    animation: login-rise-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: var(--d, 0ms);
+  }
+
+  /* Indicador "digitando…" — 3 pontos que sobem em onda. */
+  .typing-dot {
+    animation: typing-bounce 1.3s ease-in-out infinite;
+  }
+  @keyframes typing-bounce {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.5;
+    }
+    30% {
+      transform: translateY(-4px);
+      opacity: 1;
+    }
+  }
+
+  /* Brilho ambiente que pulsa atrás da cena. */
+  .scene-glow {
+    animation: scene-glow-pulse 8s ease-in-out infinite;
+  }
+  @keyframes scene-glow-pulse {
+    0%,
+    100% {
+      opacity: 0.4;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+}
+
+/* Login: com menos movimento, elementos aparecem já no lugar. */
+@media (prefers-reduced-motion: reduce) {
+  .login-rise {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+  .login-aura::before,
+  .login-halo,
+  .login-float,
+  .typing-dot,
+  .scene-glow,
+  .bubble-in,
+  .stat-rise {
+    animation: none;
+  }
+}

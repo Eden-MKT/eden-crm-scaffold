@@ -112,6 +112,8 @@ export interface Database {
           status: string;
           source: string;
           notes: string | null;
+          confirmed: boolean;
+          confirmation_sent_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -128,6 +130,8 @@ export interface Database {
           status?: string;
           source?: string;
           notes?: string | null;
+          confirmed?: boolean;
+          confirmation_sent_at?: string | null;
           created_at?: string;
         };
         Update: {
@@ -144,6 +148,8 @@ export interface Database {
           status?: string;
           source?: string;
           notes?: string | null;
+          confirmed?: boolean;
+          confirmation_sent_at?: string | null;
           created_at?: string;
         };
         Relationships: [
@@ -364,6 +370,14 @@ export interface Database {
           agenda_hours: Json;
           agenda_services: Json;
           prompt_injection_enabled: boolean;
+          knowledge_items: Json;
+          handoff_config: Json;
+          followup_config: Json;
+          objection_config: Json;
+          monday_enabled: boolean;
+          monday_board_id: string | null;
+          monday_group_map: Json;
+          monday_token: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -394,6 +408,14 @@ export interface Database {
           agenda_hours?: Json;
           agenda_services?: Json;
           prompt_injection_enabled?: boolean;
+          knowledge_items?: Json;
+          handoff_config?: Json;
+          followup_config?: Json;
+          objection_config?: Json;
+          monday_enabled?: boolean;
+          monday_board_id?: string | null;
+          monday_group_map?: Json;
+          monday_token?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -424,6 +446,14 @@ export interface Database {
           agenda_hours?: Json;
           agenda_services?: Json;
           prompt_injection_enabled?: boolean;
+          knowledge_items?: Json;
+          handoff_config?: Json;
+          followup_config?: Json;
+          objection_config?: Json;
+          monday_enabled?: boolean;
+          monday_board_id?: string | null;
+          monday_group_map?: Json;
+          monday_token?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -451,6 +481,21 @@ export interface Database {
           unread_count: number;
           last_inbound_message_id: string | null;
           ai_claimed_at: string | null;
+          patient_id: string | null;
+          lead_interest: string | null;
+          context_summary: string | null;
+          lead_temperature: string | null;
+          conversion_probability: number | null;
+          analysis_summary: string | null;
+          analyzed_at: string | null;
+          lead_status: string;
+          followup_stage: number;
+          last_followup_at: string | null;
+          followup_exhausted: boolean;
+          human_takeover: boolean;
+          human_takeover_at: string | null;
+          objections_handled: Json;
+          monday_item_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -467,6 +512,21 @@ export interface Database {
           unread_count?: number;
           last_inbound_message_id?: string | null;
           ai_claimed_at?: string | null;
+          patient_id?: string | null;
+          lead_interest?: string | null;
+          context_summary?: string | null;
+          lead_temperature?: string | null;
+          conversion_probability?: number | null;
+          analysis_summary?: string | null;
+          analyzed_at?: string | null;
+          lead_status?: string;
+          followup_stage?: number;
+          last_followup_at?: string | null;
+          followup_exhausted?: boolean;
+          human_takeover?: boolean;
+          human_takeover_at?: string | null;
+          objections_handled?: Json;
+          monday_item_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -483,6 +543,21 @@ export interface Database {
           unread_count?: number;
           last_inbound_message_id?: string | null;
           ai_claimed_at?: string | null;
+          patient_id?: string | null;
+          lead_interest?: string | null;
+          context_summary?: string | null;
+          lead_temperature?: string | null;
+          conversion_probability?: number | null;
+          analysis_summary?: string | null;
+          analyzed_at?: string | null;
+          lead_status?: string;
+          followup_stage?: number;
+          last_followup_at?: string | null;
+          followup_exhausted?: boolean;
+          human_takeover?: boolean;
+          human_takeover_at?: string | null;
+          objections_handled?: Json;
+          monday_item_id?: string | null;
           created_at?: string;
         };
         Relationships: [
@@ -617,9 +692,187 @@ export interface Database {
           },
         ];
       };
+      staff_users: {
+        Row: {
+          email: string;
+          name: string | null;
+          created_at: string;
+        };
+        Insert: {
+          email: string;
+          name?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          email?: string;
+          name?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      client_portal_users: {
+        Row: {
+          user_id: string;
+          client_id: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          client_id: string;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          client_id?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "client_portal_users_client_id_fkey";
+            columns: ["client_id"];
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      follow_ups: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          agent_id: string;
+          message: string;
+          scheduled_at: string;
+          status: string;
+          sent_at: string | null;
+          error: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          agent_id: string;
+          message: string;
+          scheduled_at: string;
+          status?: string;
+          sent_at?: string | null;
+          error?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          agent_id?: string;
+          message?: string;
+          scheduled_at?: string;
+          status?: string;
+          sent_at?: string | null;
+          error?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "follow_ups_conversation_id_fkey";
+            columns: ["conversation_id"];
+            referencedRelation: "whatsapp_conversations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "follow_ups_agent_id_fkey";
+            columns: ["agent_id"];
+            referencedRelation: "whatsapp_agents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      patients: {
+        Row: {
+          id: string;
+          client_id: string;
+          name: string;
+          phone: string;
+          email: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          name: string;
+          phone: string;
+          email?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          name?: string;
+          phone?: string;
+          email?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "patients_client_id_fkey";
+            columns: ["client_id"];
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      markei_users: {
+        Row: {
+          user_id: string;
+          email: string;
+          name: string | null;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          email: string;
+          name?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          email?: string;
+          name?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
-    Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Views: {
+      // Clientes visíveis ao papel markei — sem colunas financeiras/contratuais.
+      markei_clients: {
+        Row: {
+          id: string;
+          name: string;
+          company: string | null;
+          phone: string | null;
+          stage: string;
+          created_at: string;
+        };
+        Relationships: [];
+      };
+    };
+    Functions: {
+      portal_metrics: {
+        Args: { p_client_id: string };
+        Returns: Json;
+      };
+      markei_metrics: {
+        Args: { p_period?: string; p_agent_id?: string | null };
+        Returns: Json;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

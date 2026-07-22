@@ -7,10 +7,18 @@ import {
   MEDICAL_PROMPT,
   resolveService,
   utcToZonedParts,
+  weekdayLabelPtBr,
   type AgendaHours,
   type AgentService,
 } from "./agenda.ts";
 import { buildInjectionLayer } from "./best-practices.ts";
+import {
+  AGENDA_EXTRA_TOOLS,
+  buildKnowledgeBlock,
+  CAPABILITIES_PROMPT,
+  DETECTAR_OBJECAO_TOOL,
+  PATIENT_TOOLS,
+} from "./capabilities.ts";
 
 // deno-lint-ignore no-explicit-any
 type DB = any;
@@ -88,9 +96,15 @@ export const AGENDA_MARCAR_TOOL = {
 
 // Conjunto de tools conforme a config do agente.
 export function toolsForAgent(agent: Agent) {
-  return agent.agenda_enabled === true
-    ? [MARK_TOOL, CLASSIFY_TOOL, AGENDA_VERIFICAR_TOOL, AGENDA_MARCAR_TOOL]
-    : [MARK_TOOL, CLASSIFY_TOOL];
+  return [
+    MARK_TOOL,
+    CLASSIFY_TOOL,
+    DETECTAR_OBJECAO_TOOL,
+    ...PATIENT_TOOLS,
+    ...(agent.agenda_enabled === true
+      ? [AGENDA_VERIFICAR_TOOL, AGENDA_MARCAR_TOOL, ...AGENDA_EXTRA_TOOLS]
+      : []),
+  ];
 }
 
 // Bloco de dados estruturados do cliente (campos fixos + extra_fields).
@@ -157,11 +171,34 @@ Regras sobre esses agendamentos:
 `.trim();
 }
 
+// Bloco de adaptação de tom conforme a leitura do lead (da análise em cron).
+function buildResistanceBlock(conv?: {
+  lead_temperature?: string | null;
+  conversion_probability?: number | null;
+}): string {
+  const temp = conv?.lead_temperature ?? null;
+  const prob =
+    typeof conv?.conversion_probability === "number" ? conv.conversion_probability : null;
+  if (!temp && prob == null) {
+    return "LEITURA DO LEAD: ainda sem análise — conduza com empatia e descoberta.";
+  }
+  if (temp === "quente" || (prob != null && prob >= 70)) {
+    return "LEITURA DO LEAD: QUENTE — seja direto, proponha o agendamento agora, crie leve urgência (agenda concorrida).";
+  }
+  if (temp === "frio" || (prob != null && prob < 35)) {
+    return "LEITURA DO LEAD: FRIO/RESISTENTE — mais empatia, menos pressão, foque em construir confiança e entender a dor.";
+  }
+  return "LEITURA DO LEAD: MORNO — explore dores, crie desejo com prova social, caminhe para o próximo passo.";
+}
+
 // System prompt completo do agente (idêntico em produção e simulação).
+// patientBlock: ficha novo/antigo montada por conversa (buildPatientBlock).
 export function buildSystemPrompt(
   agent: Agent,
   contact: { name: string | null; phone: string | null },
   contactAppointments?: ContactAppointment[],
+  patientBlock?: string,
+  conv?: { lead_temperature?: string | null; conversion_probability?: number | null },
 ): string {
   const contactBlock =
     `Dados do contato (vindos do WhatsApp): nome = ${
@@ -196,11 +233,15 @@ export function buildSystemPrompt(
     agent.system_prompt ? String(agent.system_prompt) : "",
     agent.niche ? `Nicho do cliente: ${agent.niche}` : "",
     agent.prompt_injection_enabled !== false ? buildInjectionLayer(agent) : "",
+    CAPABILITIES_PROMPT,
+    buildResistanceBlock(conv),
     agent.is_medical === true ? MEDICAL_PROMPT : "",
     agent.business_info ? `Informações do negócio: ${agent.business_info}` : "",
+    buildKnowledgeBlock(agent),
     buildClientDataBlock(agent),
     agendaBlock,
     buildContactAppointmentsBlock(contactAppointments ?? [], tz),
+    patientBlock ?? "",
     agent.conversion_goal ? `Objetivo do atendimento (conversão): ${agent.conversion_goal}` : "",
     agent.greeting ? `Saudação de referência: ${agent.greeting}` : "",
     agent.agenda_enabled === true ? dateBlock : "",
@@ -253,6 +294,9 @@ export async function handleVerificar(
 
   return {
     data: args.data,
+    // O modelo não calcula dia da semana confiavelmente (já ofereceu "terça"
+    // para uma segunda). Entregamos pronto e o prompt manda usar este valor.
+    dia_semana: weekdayLabelPtBr(args.data, tz),
     servico: service.label,
     duracao_min: service.durationMin,
     horarios_livres: slots,

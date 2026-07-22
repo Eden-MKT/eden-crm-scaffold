@@ -13,8 +13,11 @@ async function invoke<T>(action: string, body: Record<string, unknown> = {}): Pr
 export const evolutionManager = {
   createInstance: (agentId: string) =>
     invoke<{ ok: boolean; instanceName: string }>("create_instance", { agentId }),
-  qr: (agentId: string) =>
-    invoke<{ base64: string | null; code: string | null }>("qr", { agentId }),
+  qr: (agentId: string, number?: string) =>
+    invoke<{ base64: string | null; code: string | null; pairingCode: string | null }>("qr", {
+      agentId,
+      ...(number ? { number } : {}),
+    }),
   status: (agentId: string) => invoke<{ status: string }>("status", { agentId }),
   logout: (agentId: string) => invoke<{ ok: boolean }>("logout", { agentId }),
   deleteInstance: (agentId: string) => invoke<{ ok: boolean }>("delete_instance", { agentId }),

@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as PortalRouteImport } from './routes/portal'
 import { Route as IaWhatsappRouteImport } from './routes/ia-whatsapp'
+import { Route as GestaoRouteImport } from './routes/gestao'
 import { Route as FinanceiroRouteImport } from './routes/financeiro'
 import { Route as ClientesRouteImport } from './routes/clientes'
 import { Route as AgendaRouteImport } from './routes/agenda'
@@ -25,6 +26,11 @@ const PortalRoute = PortalRouteImport.update({
 const IaWhatsappRoute = IaWhatsappRouteImport.update({
   id: '/ia-whatsapp',
   path: '/ia-whatsapp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GestaoRoute = GestaoRouteImport.update({
+  id: '/gestao',
+  path: '/gestao',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FinanceiroRoute = FinanceiroRouteImport.update({
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   '/agenda': typeof AgendaRoute
   '/clientes': typeof ClientesRoute
   '/financeiro': typeof FinanceiroRoute
+  '/gestao': typeof GestaoRoute
   '/ia-whatsapp': typeof IaWhatsappRoute
   '/portal': typeof PortalRoute
   '/conectar/$token': typeof ConectarTokenRoute
@@ -67,6 +74,7 @@ export interface FileRoutesByTo {
   '/agenda': typeof AgendaRoute
   '/clientes': typeof ClientesRoute
   '/financeiro': typeof FinanceiroRoute
+  '/gestao': typeof GestaoRoute
   '/ia-whatsapp': typeof IaWhatsappRoute
   '/portal': typeof PortalRoute
   '/conectar/$token': typeof ConectarTokenRoute
@@ -77,6 +85,7 @@ export interface FileRoutesById {
   '/agenda': typeof AgendaRoute
   '/clientes': typeof ClientesRoute
   '/financeiro': typeof FinanceiroRoute
+  '/gestao': typeof GestaoRoute
   '/ia-whatsapp': typeof IaWhatsappRoute
   '/portal': typeof PortalRoute
   '/conectar/$token': typeof ConectarTokenRoute
@@ -88,6 +97,7 @@ export interface FileRouteTypes {
     | '/agenda'
     | '/clientes'
     | '/financeiro'
+    | '/gestao'
     | '/ia-whatsapp'
     | '/portal'
     | '/conectar/$token'
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/agenda'
     | '/clientes'
     | '/financeiro'
+    | '/gestao'
     | '/ia-whatsapp'
     | '/portal'
     | '/conectar/$token'
@@ -106,6 +117,7 @@ export interface FileRouteTypes {
     | '/agenda'
     | '/clientes'
     | '/financeiro'
+    | '/gestao'
     | '/ia-whatsapp'
     | '/portal'
     | '/conectar/$token'
@@ -116,6 +128,7 @@ export interface RootRouteChildren {
   AgendaRoute: typeof AgendaRoute
   ClientesRoute: typeof ClientesRoute
   FinanceiroRoute: typeof FinanceiroRoute
+  GestaoRoute: typeof GestaoRoute
   IaWhatsappRoute: typeof IaWhatsappRoute
   PortalRoute: typeof PortalRoute
   ConectarTokenRoute: typeof ConectarTokenRoute
@@ -135,6 +148,13 @@ declare module '@tanstack/react-router' {
       path: '/ia-whatsapp'
       fullPath: '/ia-whatsapp'
       preLoaderRoute: typeof IaWhatsappRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gestao': {
+      id: '/gestao'
+      path: '/gestao'
+      fullPath: '/gestao'
+      preLoaderRoute: typeof GestaoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/financeiro': {
@@ -180,6 +200,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgendaRoute: AgendaRoute,
   ClientesRoute: ClientesRoute,
   FinanceiroRoute: FinanceiroRoute,
+  GestaoRoute: GestaoRoute,
   IaWhatsappRoute: IaWhatsappRoute,
   PortalRoute: PortalRoute,
   ConectarTokenRoute: ConectarTokenRoute,

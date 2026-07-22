@@ -86,6 +86,17 @@ export function utcToZonedParts(date: Date, tz: string) {
   };
 }
 
+/**
+ * Nome do dia da semana em pt-BR ("segunda-feira") para uma data AAAA-MM-DD.
+ * O modelo não sabe calcular isso e errava ao escrever "dia + data" — então
+ * quem responde a disponibilidade precisa entregar o dia pronto.
+ */
+export function weekdayLabelPtBr(dateISO: string, tz: string): string {
+  // Meio-dia local evita virada de dia por offset de fuso.
+  const noon = zonedToUtc(dateISO, "12:00", tz);
+  return new Intl.DateTimeFormat("pt-BR", { timeZone: tz, weekday: "long" }).format(noon);
+}
+
 function weekdayKeyOf(dateISO: string, tz: string): (typeof WEEKDAY_KEYS)[number] {
   // Meio-dia local evita virada de dia por offset.
   const noon = zonedToUtc(dateISO, "12:00", tz);
@@ -298,6 +309,9 @@ ${svc || "- Consulta (~60 min)"}
   invente horário.
 - Ao apresentar horários, escreva de forma NATURAL e inline, numa frase só, NUNCA em lista com
   marcadores — ex.: "Na sexta (17/07) eu tenho 8h, 10h ou 14h, qual fica melhor? 😊".
+- NUNCA calcule o dia da semana de cabeça. Use EXATAMENTE o campo "dia_semana" que a ferramenta
+  verificar_disponibilidade devolveu para aquela data. Se você não tiver esse campo, cite só a
+  data (ex.: "no dia 17/07") — dizer o dia errado faz o paciente aparecer no dia errado.
 - Se o dia pedido não tiver vaga, NÃO peça para o paciente ficar chutando datas. Você mesmo
   verifica os próximos dias úteis (chamando a ferramenta para os próximos dias) e já oferece a
   primeira data com horários livres. Diga a indisponibilidade UMA vez, de forma acolhedora, e

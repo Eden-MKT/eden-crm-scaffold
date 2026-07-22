@@ -1,8 +1,16 @@
-import { Bot, Calendar, LayoutDashboard, Users, Wallet, type LucideIcon } from "lucide-react";
+import {
+  Bot,
+  Calendar,
+  ChartColumn,
+  LayoutDashboard,
+  Users,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
 
 export interface NavItem {
   title: string;
-  url: "/" | "/clientes" | "/agenda" | "/financeiro" | "/ia-whatsapp";
+  url: "/" | "/clientes" | "/agenda" | "/financeiro" | "/ia-whatsapp" | "/gestao";
   icon: LucideIcon;
 }
 
@@ -12,6 +20,7 @@ export const MAIN_NAV: NavItem[] = [
   { title: "Agenda", url: "/agenda", icon: Calendar },
   { title: "IA WhatsApp", url: "/ia-whatsapp", icon: Bot },
   { title: "Financeiro", url: "/financeiro", icon: Wallet },
+  { title: "Gestão", url: "/gestao", icon: ChartColumn },
 ];
 
 export function isNavActive(pathname: string, url: string): boolean {

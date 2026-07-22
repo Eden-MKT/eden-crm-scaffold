@@ -30,6 +30,8 @@ Deno.serve(async (req) => {
     messages?: { role: "user" | "assistant"; content: string }[];
     contact?: { name: string | null; phone: string | null };
     contactAppointments?: ContactAppointment[];
+    patientBlock?: string;
+    conv?: { lead_temperature?: string | null; conversion_probability?: number | null };
   };
   try {
     body = await req.json();
@@ -44,9 +46,21 @@ Deno.serve(async (req) => {
     ? body.contactAppointments
     : [];
   const model = String(agent.model ?? "gpt-4o");
+  // Ações de paciente/handoff simuladas neste turno (dry-run).
+  const patientActions: { tool: string; args: unknown }[] = [];
+  let handoff = false;
 
   const messages: ChatMessage[] = [
-    { role: "system", content: buildSystemPrompt(agent, contact, contactAppointments) },
+    {
+      role: "system",
+      content: buildSystemPrompt(
+        agent,
+        contact,
+        contactAppointments,
+        body.patientBlock,
+        body.conv ?? undefined,
+      ),
+    },
     ...history.map((m) => ({ role: m.role, content: m.content })),
   ];
   const tools = toolsForAgent(agent);
@@ -110,6 +124,36 @@ Deno.serve(async (req) => {
             } else {
               result = { ok: false, erro: "Informe data e hora." };
             }
+          } else if (tc.name === "cadastrar_paciente" || tc.name === "atualizar_paciente") {
+            let a: Record<string, unknown> = {};
+            try {
+              a = JSON.parse(tc.arguments || "{}");
+            } catch {
+              /* ignora */
+            }
+            patientActions.push({ tool: tc.name, args: a });
+            result = { ok: true, simulado: true };
+          } else if (tc.name === "encaminhar_humano") {
+            handoff = true;
+            patientActions.push({ tool: tc.name, args: tc.arguments });
+            result = {
+              ok: true,
+              simulado: true,
+              instrucao:
+                "Avise ao lead, com simpatia e em uma frase, que a pessoa responsável vai assumir a conversa por aqui. Esta é sua última mensagem.",
+            };
+          } else if (tc.name === "confirmar_presenca" || tc.name === "cancelar_consulta") {
+            patientActions.push({ tool: tc.name, args: {} });
+            result = { ok: true, simulado: true };
+          } else if (tc.name === "detectar_objecao") {
+            // Dry-run: não envia vídeo nem grava; só registra a intenção.
+            let tipo: string | undefined;
+            try {
+              tipo = JSON.parse(tc.arguments || "{}").tipo;
+            } catch {
+              /* ignora argumentos inválidos */
+            }
+            result = { ok: true, simulado: true, tipo };
           }
           messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(result) });
         }
@@ -119,17 +163,39 @@ Deno.serve(async (req) => {
       break;
     }
 
+    const extras = { patientActions, handoff };
+
     if (!finalText)
-      return json({ bubbles: [], finalText: "", toolCalls: calledTools, bookings, silent: true });
+      return json({
+        bubbles: [],
+        finalText: "",
+        toolCalls: calledTools,
+        bookings,
+        silent: true,
+        ...extras,
+      });
 
     if (finalText.includes(NO_REPLY)) {
       const cleaned = finalText.split(NO_REPLY).join("").trim();
       if (!cleaned)
-        return json({ bubbles: [], finalText: "", toolCalls: calledTools, bookings, silent: true });
+        return json({
+          bubbles: [],
+          finalText: "",
+          toolCalls: calledTools,
+          bookings,
+          silent: true,
+          ...extras,
+        });
       finalText = cleaned;
     }
 
-    return json({ bubbles: splitBubbles(finalText), finalText, toolCalls: calledTools, bookings });
+    return json({
+      bubbles: splitBubbles(finalText),
+      finalText,
+      toolCalls: calledTools,
+      bookings,
+      ...extras,
+    });
   } catch (e) {
     console.error("simulate-turn error:", e);
     return json({ error: String(e) }, 500);

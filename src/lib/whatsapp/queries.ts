@@ -12,6 +12,10 @@ import {
   type AgentExtraField,
   type AgentService,
   type AgendaHours,
+  type FollowupConfig,
+  type HandoffConfig,
+  type KnowledgeItem,
+  type ObjectionConfigItem,
   type WhatsappAgent,
   type WhatsappConversation,
   type WhatsappMessage,
@@ -31,8 +35,12 @@ export interface AgentWithClient {
   client: Client;
 }
 
+// NÃO inclua as colunas monday_* aqui. monday_token é um segredo do cliente e
+// só deve ser lido pelas Edge Functions (service role) — listar aqui o entrega
+// ao navegador de qualquer usuário do painel. Quando houver UI de configuração
+// do Monday, busque a config por um caminho que não exponha o token.
 const AGENT_COLS =
-  "id, client_id, instance_name, status, phone_number, system_prompt, niche, business_info, conversion_goal, model, temperature, ai_enabled, greeting, responsible_name, responsible_phone, business_address, profession, registration_number, extra_fields, response_delay_seconds, is_medical, agenda_enabled, agenda_timezone, agenda_hours, agenda_services, prompt_injection_enabled, created_at, updated_at";
+  "id, client_id, instance_name, status, phone_number, system_prompt, niche, business_info, conversion_goal, model, temperature, ai_enabled, greeting, responsible_name, responsible_phone, business_address, profession, registration_number, extra_fields, response_delay_seconds, is_medical, agenda_enabled, agenda_timezone, agenda_hours, agenda_services, prompt_injection_enabled, knowledge_items, objection_config, handoff_config, followup_config, created_at, updated_at";
 
 // Lista todos os clientes com o agente (se existir) — a base dos cards.
 export async function fetchAgentsWithClients(): Promise<AgentWithClient[]> {
@@ -96,6 +104,10 @@ export interface UpdateAgentInput {
   agendaHours?: AgendaHours;
   agendaServices?: AgentService[];
   promptInjectionEnabled?: boolean;
+  knowledgeItems?: KnowledgeItem[];
+  objectionConfig?: ObjectionConfigItem[];
+  handoffConfig?: HandoffConfig;
+  followupConfig?: FollowupConfig;
 }
 
 export async function updateAgent(id: string, patch: UpdateAgentInput): Promise<void> {
@@ -126,6 +138,14 @@ export async function updateAgent(id: string, patch: UpdateAgentInput): Promise<
     row.agenda_services = patch.agendaServices as unknown as AgentUpdate["agenda_services"];
   if (patch.promptInjectionEnabled !== undefined)
     row.prompt_injection_enabled = patch.promptInjectionEnabled;
+  if (patch.knowledgeItems !== undefined)
+    row.knowledge_items = patch.knowledgeItems as unknown as AgentUpdate["knowledge_items"];
+  if (patch.objectionConfig !== undefined)
+    row.objection_config = patch.objectionConfig as unknown as AgentUpdate["objection_config"];
+  if (patch.handoffConfig !== undefined)
+    row.handoff_config = patch.handoffConfig as unknown as AgentUpdate["handoff_config"];
+  if (patch.followupConfig !== undefined)
+    row.followup_config = patch.followupConfig as unknown as AgentUpdate["followup_config"];
   const { error } = await supabase.from("whatsapp_agents").update(row).eq("id", id);
   if (error) throw error;
 }
@@ -166,6 +186,118 @@ export async function clearUnread(conversationId: string): Promise<void> {
     .from("whatsapp_conversations")
     .update({ unread_count: 0 })
     .eq("id", conversationId);
+}
+
+// ---- Handoff / análise / follow-ups (compartilhado entre painéis) ----
+
+export async function setHumanTakeover(conversationId: string, on: boolean): Promise<void> {
+  const { error } = await supabase
+    .from("whatsapp_conversations")
+    .update({
+      human_takeover: on,
+      human_takeover_at: on ? new Date().toISOString() : null,
+      ai_paused: on,
+    })
+    .eq("id", conversationId);
+  if (error) throw error;
+}
+
+export async function setAgentAiEnabled(agentId: string, on: boolean): Promise<void> {
+  const { error } = await supabase
+    .from("whatsapp_agents")
+    .update({ ai_enabled: on })
+    .eq("id", agentId);
+  if (error) throw error;
+}
+
+export interface LeadAnalysis {
+  lead_temperature: "hot" | "warm" | "cold";
+  conversion_probability: number;
+  analysis_summary: string;
+  lead_interest: string | null;
+  lead_status: string;
+}
+
+export async function analyzeConversation(conversationId: string): Promise<LeadAnalysis> {
+  const { data, error } = await supabase.functions.invoke("analyze-conversation", {
+    body: { conversationId },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data as LeadAnalysis;
+}
+
+export interface ManualFollowUp {
+  id: string;
+  conversationId: string;
+  agentId: string;
+  message: string;
+  scheduledAt: string;
+  status: "pending" | "sending" | "sent" | "cancelled" | "failed";
+  sentAt: string | null;
+  error: string | null;
+  createdAt: string;
+  leadName: string | null;
+  leadPhone: string;
+}
+
+const FOLLOWUP_COLS =
+  "id, conversation_id, agent_id, message, scheduled_at, status, sent_at, error, created_at, whatsapp_conversations(contact_name, remote_jid)";
+
+function mapFollowUp(row: Record<string, unknown>): ManualFollowUp {
+  const conv = (row.whatsapp_conversations ?? {}) as {
+    contact_name?: string | null;
+    remote_jid?: string;
+  };
+  return {
+    id: String(row.id),
+    conversationId: String(row.conversation_id),
+    agentId: String(row.agent_id),
+    message: String(row.message ?? ""),
+    scheduledAt: String(row.scheduled_at),
+    status: row.status as ManualFollowUp["status"],
+    sentAt: (row.sent_at as string | null) ?? null,
+    error: (row.error as string | null) ?? null,
+    createdAt: String(row.created_at),
+    leadName: conv.contact_name ?? null,
+    leadPhone: String(conv.remote_jid ?? "").split("@")[0],
+  };
+}
+
+export async function fetchManualFollowUps(status?: string): Promise<ManualFollowUp[]> {
+  let q = supabase.from("follow_ups").select(FOLLOWUP_COLS).order("scheduled_at", {
+    ascending: true,
+  });
+  if (status && status !== "all") q = q.eq("status", status);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []).map((r) => mapFollowUp(r as Record<string, unknown>));
+}
+
+export async function createManualFollowUp(input: {
+  conversationId: string;
+  agentId: string;
+  message: string;
+  scheduledAt: string;
+}): Promise<void> {
+  const { error } = await supabase.from("follow_ups").insert({
+    conversation_id: input.conversationId,
+    agent_id: input.agentId,
+    message: input.message,
+    scheduled_at: input.scheduledAt,
+  });
+  if (error) throw error;
+}
+
+export async function setManualFollowUpStatus(
+  id: string,
+  status: "sent" | "cancelled",
+): Promise<void> {
+  const { error } = await supabase
+    .from("follow_ups")
+    .update({ status, ...(status === "sent" ? { sent_at: new Date().toISOString() } : {}) })
+    .eq("id", id);
+  if (error) throw error;
 }
 
 // ---- Métricas do dashboard ----

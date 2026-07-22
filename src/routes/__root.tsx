@@ -177,9 +177,14 @@ function AuthGate() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { loading, session, user } = useAuth();
 
-  // Rotas com shell próprio (QR público, portal do cliente) renderizam fora do
-  // AppShell. Checado antes de loading/login (SSR-safe via router).
-  if (pathname.startsWith("/conectar") || pathname.startsWith("/portal")) {
+  // Rotas com shell próprio (QR público, portal do cliente, painel de gestão)
+  // renderizam fora do AppShell. Checado antes de loading/login (SSR-safe via
+  // router). /gestao faz o próprio guard de sessão + staff dentro da rota.
+  if (
+    pathname.startsWith("/conectar") ||
+    pathname.startsWith("/portal") ||
+    pathname.startsWith("/gestao")
+  ) {
     return <Outlet />;
   }
 

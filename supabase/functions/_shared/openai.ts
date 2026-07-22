@@ -23,6 +23,7 @@ export async function chat(opts: {
   temperature?: number;
   tools?: unknown[];
   maxTokens?: number;
+  responseFormat?: unknown;
 }): Promise<ChatResult> {
   const res = await fetch(`${OPENAI}/chat/completions`, {
     method: "POST",
@@ -36,6 +37,7 @@ export async function chat(opts: {
       temperature: opts.temperature ?? 0.7,
       max_tokens: opts.maxTokens ?? 700,
       tools: opts.tools,
+      ...(opts.responseFormat ? { response_format: opts.responseFormat } : {}),
     }),
   });
   if (!res.ok) {
@@ -43,14 +45,13 @@ export async function chat(opts: {
   }
   const data = await res.json();
   const choice = data.choices?.[0]?.message ?? {};
-  const toolCalls = (choice.tool_calls ?? []).map((tc: {
-    id: string;
-    function: { name: string; arguments: string };
-  }) => ({
-    id: tc.id,
-    name: tc.function.name,
-    arguments: tc.function.arguments,
-  }));
+  const toolCalls = (choice.tool_calls ?? []).map(
+    (tc: { id: string; function: { name: string; arguments: string } }) => ({
+      id: tc.id,
+      name: tc.function.name,
+      arguments: tc.function.arguments,
+    }),
+  );
   return {
     content: choice.content ?? null,
     toolCalls,
@@ -67,7 +68,8 @@ export async function transcribe(
 ): Promise<{ text: string; seconds: number }> {
   const form = new FormData();
   const ext = mime.includes("mp4") || mime.includes("m4a") ? "m4a" : "ogg";
-  form.append("file", new Blob([bytes], { type: mime }), `audio.${ext}`);
+  // new Uint8Array(bytes) garante ArrayBuffer (não SharedArrayBuffer) para o Blob — type-check Deno.
+  form.append("file", new Blob([new Uint8Array(bytes)], { type: mime }), `audio.${ext}`);
   form.append("model", "whisper-1");
   form.append("response_format", "verbose_json");
   const res = await fetch(`${OPENAI}/audio/transcriptions`, {

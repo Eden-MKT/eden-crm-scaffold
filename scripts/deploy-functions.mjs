@@ -38,6 +38,10 @@ const FUNCTIONS = [
   "portal-agenda",
   "improve-prompt",
   "simulate-turn",
+  "followup-runner",
+  "orchestrator-run",
+  "analyze-conversation",
+  "connection-health",
 ];
 
 const sharedDir = join(FUNCTIONS_DIR, "_shared");

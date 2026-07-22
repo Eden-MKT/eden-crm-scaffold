@@ -2,6 +2,9 @@ import { admin } from "../_shared/db.ts";
 import { json, preflight } from "../_shared/cors.ts";
 import * as evo from "../_shared/evolution.ts";
 
+const WEBHOOK_URL = `${Deno.env.get("SUPABASE_URL")}/functions/v1/evolution-webhook`;
+const WEBHOOK_TOKEN = () => Deno.env.get("EVOLUTION_WEBHOOK_TOKEN")!;
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return preflight();
 
@@ -44,14 +47,24 @@ Deno.serve(async (req) => {
         .from("whatsapp_connect_tokens")
         .update({ used_at: new Date().toISOString() })
         .eq("token", token);
-      await db
-        .from("whatsapp_agents")
-        .update({ status: "connected" })
-        .eq("id", agent.id);
+      await db.from("whatsapp_agents").update({ status: "connected" }).eq("id", agent.id);
       return json({ status: "connected" });
     }
 
-    // Não conectado → QR fresco
+    // Não conectado → garante instância limpa (sessão zumbi faz o celular
+    // recusar o QR) e gera QR fresco. ensureCleanInstance protege pareamento
+    // em andamento (só recria instância morta e sem atividade recente).
+    const recreated = await evo.ensureCleanInstance({
+      instanceName: agent.instance_name,
+      webhookUrl: WEBHOOK_URL,
+      webhookToken: WEBHOOK_TOKEN(),
+    });
+    if (recreated) {
+      await db
+        .from("whatsapp_agents")
+        .update({ status: "connecting", phone_number: null })
+        .eq("id", agent.id);
+    }
     const r = (await evo.connectInstance(agent.instance_name)) as {
       base64?: string;
     };
