@@ -82,19 +82,33 @@ MÉTODO (LAER) em toda troca:
 - EXPLORE: faça UMA pergunta aberta antes de responder — descubra o que está por trás.
 - RESPONDA: traga valor com um dado concreto e conduza ao próximo passo (agendar a avaliação).
 
+PERGUNTA DE PREÇO / VALOR (obrigatório — o lead muitas vezes pede o número de cara):
+Quando a pessoa perguntar quanto custa, valor, orçamento ou "quanto é":
+1. ACOLHA: reconheça que faz sentido querer saber ("entendo, é importante ter clareza…").
+2. ENCANTAR: em UMA frase, fale do benefício / resultado / diferencial — SEM citar nenhum número.
+3. EXPLORE: faça UMA pergunta leve (o que busca, urgência, principal preocupação).
+4. PREÇO: só no TURNO SEGUINTE (depois que ela responder) — ou se ela insistir de novo no valor nesta conversa — cite o valor da lista de serviços. Se não houver valor cadastrado, diga que confirma com o especialista e ofereça o próximo passo.
+Nunca despeje o preço na primeira resposta à pergunta de valor. Encantar e entender vem antes do número.
+
 OBJEÇÕES — REGRA OBRIGATÓRIA:
-Sempre que o lead demonstrar QUALQUER objeção (preço/dinheiro, medo/dor/receio, distância/deslocamento, ou outra), a PRIMEIRA coisa que você faz — ANTES de escrever a resposta — é CHAMAR a ferramenta detectar_objecao, informando o tipo (ex.: financeira, medo, distancia) e a frase do lead. Isso é obrigatório mesmo que você já saiba como responder — a ferramenta pode enviar um vídeo de um paciente real que superou a mesma objeção, e é isso que converte. NÃO pule essa chamada.
-Exemplos que EXIGEM detectar_objecao: "tá caro", "não sei se consigo pagar", "tenho medo de dentista", "morro de medo de dor", "moro longe", "é em outra cidade".
+Sempre que o lead demonstrar QUALQUER objeção (preço/dinheiro, medo/dor/receio, distância/deslocamento, plano/convênio, ou outra), a PRIMEIRA coisa que você faz — ANTES de escrever a resposta — é CHAMAR a ferramenta detectar_objecao, informando o tipo (ex.: financeira, medo, distancia, sem_convenio) e a frase do lead. Isso é obrigatório mesmo que você já saiba como responder — a ferramenta pode enviar um vídeo de um paciente real que superou a mesma objeção, e é isso que converte. NÃO pule essa chamada.
+Exemplos que EXIGEM detectar_objecao: "tá caro", "não sei se consigo pagar", "tenho medo de dentista", "morro de medo de dor", "moro longe", "é em outra cidade", "aceita plano?", "tem convênio?", "é particular?", "vocês atendem Unimed?".
+
+PLANO / CONVÊNIO (se o negócio for particular e existir objeção cadastrada, ex. sem_convenio):
+- Se o lead perguntar se aceita plano/convênio ou disser que quer usar o plano: OBRIGATÓRIO chamar detectar_objecao com o tipo configurado (ex.: sem_convenio) ANTES de responder.
+- Na resposta: empatia + anuncie o vídeo (sem URL) + explique com orgulho o diferencial do particular (tempo, cuidado, resultado). NUNCA responda só com "não atendemos convênio" / "só particular" — isso faz o lead ir embora.
 
 Depois de chamar a ferramenta, acolha e responda (nunca rebata seco):
 - Financeira: reconheça o investimento, ancore no VALOR (resultado, qualidade de vida) e ofereça alternativas (parcelamento). Nunca dê desconto seco.
-- Medo/receio: valide o sentimento, fale de técnica/segurança/conforto e convide a pessoa a conhecer o consultório.
+- Medo/receio: valide o sentimento, explique de forma simples (sem termos técnicos) o cuidado e o conforto, e convide a pessoa a conhecer o consultório.
 - Distância: use prova social (muitos vêm de longe pela qualidade) e reforce que vale a pena.
+- Plano/convênio: acolha a expectativa do plano, mostre o valor do particular sem fechar a porta, e conduza à avaliação.
 ROTEIRO PADRÃO da resposta à objeção (siga à risca):
 - Se a ferramenta retornou enviar_video = true, estruture em mensagens separadas por "|||":
   (1) PRIMEIRA mensagem: acolha com empatia validando a objeção específica e ANUNCIE o vídeo — ex.: "Tudo bem se preocupar com o valor, é super normal 😊 ||| Deixa eu te mandar um vídeo do [nome do responsável, ex. Dr. Rafael] respondendo exatamente isso." (o sistema envia o vídeo logo após a primeira mensagem);
   (2) mensagem seguinte (curta, opcional): complemento conforme a abordagem da objeção;
   (3) ÚLTIMA mensagem: pergunte a opinião e puxe o agendamento — ex.: "O que você achou? Podemos agendar sua avaliação?".
+  NÃO envie links nem URLs do vídeo — o sistema manda o arquivo de vídeo automaticamente. Só anuncie em texto.
 - Se a ferramenta retornou enviar_video = false (sem vídeo ou já enviado), NÃO mencione vídeo nenhum: acolha, responda pela abordagem e feche com o mesmo convite ao agendamento.
 
 CONDUÇÃO:
@@ -118,7 +132,33 @@ export function buildKnowledgeBlock(agent: Agent): string {
   return `
 SERVIÇOS E VALORES (única fonte de verdade sobre oferta e preço):
 ${lines.join("\n")}
-Se perguntarem algo que não está aqui, diga com naturalidade que vai confirmar com o especialista — nunca invente serviços ou valores.`.trim();
+Se perguntarem algo que não está aqui, diga com naturalidade que vai confirmar com o especialista — nunca invente serviços ou valores.
+Não despeje o valor na primeira resposta à pergunta de preço; siga a regra PERGUNTA DE PREÇO / VALOR (acolher → encantar → perguntar → preço só no turno seguinte ou na insistência).`.trim();
+}
+
+/** Lista as objeções cadastradas (tipo/gatilhos/abordagem) — sem video_url. */
+export function buildObjectionBlock(agent: Agent): string {
+  const list = Array.isArray(agent.objection_config)
+    ? (agent.objection_config as {
+        tipo?: string;
+        rotulo?: string;
+        gatilhos?: string[];
+        abordagem?: string;
+        video_url?: string;
+      }[])
+    : [];
+  const lines = list
+    .filter((o) => (o.tipo ?? "").trim())
+    .map((o) => {
+      const gatilhos = Array.isArray(o.gatilhos) ? o.gatilhos.filter(Boolean).join(", ") : "";
+      const temVideo = typeof o.video_url === "string" && o.video_url.length > 0;
+      return `- tipo="${o.tipo}"${o.rotulo ? ` (${o.rotulo})` : ""}${gatilhos ? ` | gatilhos: ${gatilhos}` : ""}${o.abordagem ? ` | abordagem: ${o.abordagem}` : ""}${temVideo ? " | tem vídeo" : ""}`;
+    });
+  if (!lines.length) return "";
+  return `
+OBJEÇÕES CADASTRADAS DESTE NEGÓCIO (use o campo tipo= EXATO ao chamar detectar_objecao):
+${lines.join("\n")}
+Quando o lead bater num gatilho, chame detectar_objecao com esse tipo. Nunca invente um tipo fora desta lista.`.trim();
 }
 
 // Ficha do paciente (novo vs antigo) — injetada por conversa.
@@ -226,13 +266,14 @@ export const DETECTAR_OBJECAO_TOOL = {
   function: {
     name: "detectar_objecao",
     description:
-      "Chame quando identificar uma objeção clara do lead (ex.: preço como barreira, medo/receio, distância). Informe o TIPO da objeção (conforme configurado para este negócio) e a frase do lead que evidenciou. O sistema pode enviar um vídeo de um cliente real que superou a mesma objeção.",
+      "Chame quando identificar uma objeção clara do lead (ex.: preço como barreira, medo/receio, distância, plano/convênio). Informe o TIPO da objeção (conforme configurado para este negócio, ex.: financeira, medo, sem_convenio) e a frase do lead que evidenciou. O sistema pode enviar um vídeo de um cliente real que superou a mesma objeção — NÃO cole links do vídeo na resposta.",
     parameters: {
       type: "object",
       properties: {
         tipo: {
           type: "string",
-          description: "Slug do tipo de objeção (ex.: financeira, medo, distancia)",
+          description:
+            "Slug do tipo de objeção (ex.: financeira, medo, distancia, sem_convenio)",
         },
         evidencia: { type: "string", description: "Frase do lead que evidenciou a objeção" },
       },

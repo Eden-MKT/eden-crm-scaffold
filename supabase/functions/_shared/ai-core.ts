@@ -16,6 +16,7 @@ import { buildInjectionLayer } from "./best-practices.ts";
 import {
   AGENDA_EXTRA_TOOLS,
   buildKnowledgeBlock,
+  buildObjectionBlock,
   CAPABILITIES_PROMPT,
   DETECTAR_OBJECAO_TOOL,
   PATIENT_TOOLS,
@@ -184,7 +185,7 @@ function buildResistanceBlock(conv?: {
     return "LEITURA DO LEAD: ainda sem análise — conduza com empatia e descoberta.";
   }
   if (temp === "quente" || (prob != null && prob >= 70)) {
-    return "LEITURA DO LEAD: QUENTE — seja direto, proponha o agendamento agora, crie leve urgência (agenda concorrida).";
+    return "LEITURA DO LEAD: QUENTE — proponha o agendamento com clareza e leve urgência (agenda concorrida). Seja objetivo no fechamento, mas NÃO pule acolhimento nem solte preço na primeira resposta à pergunta de valor (siga a regra de preço).";
   }
   if (temp === "frio" || (prob != null && prob < 35)) {
     return "LEITURA DO LEAD: FRIO/RESISTENTE — mais empatia, menos pressão, foque em construir confiança e entender a dor.";
@@ -239,6 +240,7 @@ export function buildSystemPrompt(
     agent.is_medical === true ? MEDICAL_PROMPT : "",
     agent.business_info ? `Informações do negócio: ${agent.business_info}` : "",
     buildKnowledgeBlock(agent),
+    buildObjectionBlock(agent),
     buildClientDataBlock(agent),
     agendaBlock,
     buildContactAppointmentsBlock(contactAppointments ?? [], tz),

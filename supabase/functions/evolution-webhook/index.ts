@@ -29,7 +29,7 @@ import {
   handoffPhones,
   type PatientRecord,
 } from "../_shared/capabilities.ts";
-import { registrarObjecao, registrarTentativaVideo } from "../_shared/objection.ts";
+import { registrarObjecao, registrarTentativaVideo, stripObjectionVideoUrls, toolResultForModel } from "../_shared/objection.ts";
 import { processDispatchInbound } from "../_shared/dispatch-optout.ts";
 import { resolveLeadPhone } from "../_shared/phone.ts";
 import { syncMonday } from "../_shared/monday.ts";
@@ -906,7 +906,8 @@ async function runPipeline(
               if (dec.enviar_video && dec.video_url) {
                 objecaoVideo = { url: dec.video_url, tipo: String(tipo) };
               }
-              result = dec;
+              // Sem video_url no retorno — o modelo colava o link na bolha.
+              result = toolResultForModel(dec);
             } catch {
               result = { ok: false, reason: "erro" };
             }
@@ -954,7 +955,9 @@ async function runPipeline(
         }
       : null;
 
-    const bubbles = splitBubbles(finalText);
+    const bubbles = splitBubbles(finalText)
+      .map((b) => stripObjectionVideoUrls(b, objecaoVideo?.url))
+      .filter(Boolean);
     for (let i = 0; i < bubbles.length; i++) {
       const bubble = bubbles[i];
       // Abort-no-meio: se o cliente mandou algo novo enquanto a IA envia as

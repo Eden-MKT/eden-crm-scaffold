@@ -84,6 +84,33 @@ export async function registrarObjecao(
   };
 }
 
+/** Resultado seguro para o modelo: sem video_url (evita colar o link na bolha). */
+export function toolResultForModel(dec: {
+  ok: boolean;
+  enviar_video: boolean;
+  video_url?: string;
+  reason?: string;
+}): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    ok: dec.ok,
+    enviar_video: dec.enviar_video,
+  };
+  if (dec.reason) out.reason = dec.reason;
+  if (dec.enviar_video) {
+    out.instrucao =
+      "O sistema envia o vídeo automaticamente após sua primeira mensagem. NÃO cole links nem URLs do vídeo na resposta — só anuncie em texto que vai mandar o vídeo.";
+  }
+  return out;
+}
+
+/** Remove URLs do bucket de vídeos de objeção (e URL explícita da rodada) do texto. */
+export function stripObjectionVideoUrls(text: string, extraUrl?: string | null): string {
+  let out = text;
+  if (extraUrl) out = out.split(extraUrl).join(" ");
+  out = out.replace(/https?:\/\/[^\s<>"')\]]*objection-videos[^\s<>"')\]]*/gi, " ");
+  return out.replace(/[ \t]{2,}/g, " ").replace(/ *\n */g, "\n").trim();
+}
+
 /**
  * Registra o resultado da tentativa de envio do vídeo (fase de saída).
  *
