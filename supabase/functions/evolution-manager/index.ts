@@ -218,8 +218,23 @@ Deno.serve(async (req) => {
     }
   } catch (e) {
     console.error("evolution-manager error:", e);
-    return json({ error: String(e) }, 500);
+    return json({ error: friendlyError(e) }, 502);
   }
 });
+
+// Traduz erros técnicos do Evolution para mensagens acionáveis em pt-BR — o
+// front mostra isso direto no toast. O texto cru fica no console.error acima.
+function friendlyError(e: unknown): string {
+  const raw = String(e instanceof Error ? e.message : e);
+  if (/(already\s+in\s+use|already\s+exists|in[-\s]?use)/i.test(raw)) {
+    return "A conexão anterior ainda está sendo liberada. Aguarde alguns segundos e tente de novo.";
+  }
+  if (/Evolution API não configurada/i.test(raw)) return raw; // já é claro
+  if (/ainda está sendo liberada/i.test(raw)) return raw; // já amigável (ensureCleanInstance)
+  if (/-> 4\d\d:|-> 5\d\d:|Evolution (GET|POST|DELETE)/i.test(raw)) {
+    return "Não foi possível preparar a conexão agora. Tente novamente em alguns segundos.";
+  }
+  return raw;
+}
 
 export { corsHeaders };

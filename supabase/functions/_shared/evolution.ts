@@ -176,14 +176,19 @@ export async function ensureCleanInstance(
     } catch {
       /* sem sessão para deslogar */
     }
-    try {
-      await deleteInstance(o.instanceName);
-    } catch {
-      /* melhor esforço */
+    // Zumbi com credenciais antigas pode demorar a sair: tenta o delete mais de
+    // uma vez (o 1º às vezes só agenda a remoção).
+    for (let i = 0; i < 2; i++) {
+      try {
+        await deleteInstance(o.instanceName);
+      } catch {
+        /* melhor esforço */
+      }
     }
     // O delete da Evolution é assíncrono: espera a remoção efetivar antes de
-    // recriar, senão o create responde 403 "name already in use".
-    for (let i = 0; i < 8; i++) {
+    // recriar, senão o create responde 403 "name already in use". Janela ampla
+    // (~12s) porque instância zumbi com sessão demora mais para liberar.
+    for (let i = 0; i < 12; i++) {
       await new Promise((r) => setTimeout(r, 1000));
       try {
         const left = (await fetchInstances(o.instanceName)) as unknown[];
@@ -194,19 +199,26 @@ export async function ensureCleanInstance(
     }
   }
 
-  // Retry curto: cobre o resto da janela de propagação do delete.
+  // Retry: cobre o resto da janela de propagação do delete. O texto do 403 do
+  // Evolution varia ("already in use", "is already in use", "already exists"),
+  // então o match é tolerante — senão o retry nem dispara e estoura de primeira.
+  const NAME_TAKEN = /(already\s+in\s+use|already\s+exists|in[-\s]?use)/i;
   let lastErr: unknown = null;
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 5; i++) {
     try {
       await createInstance(o);
       return true;
     } catch (e) {
       lastErr = e;
-      if (!String(e).includes("already in use")) throw e;
+      if (!NAME_TAKEN.test(String(e))) throw e;
       await new Promise((r) => setTimeout(r, 2000));
     }
   }
-  throw lastErr;
+  // Ainda ocupado após todos os retries: erro amigável (o cru vai em cause).
+  throw new Error(
+    "A conexão anterior ainda está sendo liberada pelo servidor. Aguarde ~10s e tente novamente.",
+    { cause: lastErr },
+  );
 }
 
 // Exibe presença ("digitando…") por `delayMs` sem enviar mensagem — usado
