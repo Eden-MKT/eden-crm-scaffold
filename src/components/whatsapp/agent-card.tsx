@@ -16,12 +16,12 @@ export function AgentCard({ item, onOpen, onConfigure }: AgentCardProps) {
   const status = agent ? agent.status : "none";
 
   return (
-    <div className="relative">
+    <div className="relative h-full">
       <button
         type="button"
         onClick={onOpen}
         className={cn(
-          "press-scale surface-depth surface-depth-hover group flex w-full flex-col gap-3 rounded-xl p-4 pb-10 text-left",
+          "press-scale surface-depth surface-depth-hover group flex h-full w-full flex-col gap-3 rounded-xl p-4 pb-10 text-left",
         )}
       >
         <div className="flex items-start justify-between gap-2">

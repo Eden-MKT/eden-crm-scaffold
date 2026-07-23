@@ -5,7 +5,10 @@ import { toast } from "sonner";
 
 import { updateAgent, whatsappKeys } from "@/lib/whatsapp/queries";
 import { improvePrompt } from "@/lib/whatsapp/improve-prompt";
-import { uploadObjectionVideo } from "@/lib/whatsapp/objection-video";
+import {
+  slugifyObjectionTipo,
+  uploadObjectionVideo,
+} from "@/lib/whatsapp/objection-video";
 import {
   DEFAULT_AGENDA_HOURS,
   WEEKDAYS,
@@ -92,6 +95,10 @@ export function AgentSettingsSheet({
   });
   const [improving, setImproving] = useState(false);
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{
+    phase: "compressing" | "uploading";
+    ratio: number;
+  } | null>(null);
   const [extraFields, setExtraFields] = useState<AgentExtraField[]>(agent.extraFields);
   const [services, setServices] = useState<AgentService[]>(agent.agendaServices);
   const [hours, setHours] = useState<AgendaHours>(agent.agendaHours ?? DEFAULT_AGENDA_HOURS);
@@ -164,7 +171,17 @@ export function AgentSettingsSheet({
     setKnowledgeItems((ks) => ks.filter((_, idx) => idx !== i));
 
   const setObjection = (i: number, patch: Partial<ObjectionConfigItem>) =>
-    setObjectionConfig((os) => os.map((o, idx) => (idx === i ? { ...o, ...patch } : o)));
+    setObjectionConfig((os) =>
+      os.map((o, idx) => {
+        if (idx !== i) return o;
+        const next = { ...o, ...patch };
+        // Slug interno acompanha o nome amigável (não é digitado pelo usuário).
+        if (patch.rotulo !== undefined) {
+          next.tipo = slugifyObjectionTipo(patch.rotulo);
+        }
+        return next;
+      }),
+    );
   const addObjection = () =>
     setObjectionConfig((os) => [
       ...os,
@@ -175,25 +192,28 @@ export function AgentSettingsSheet({
   const loadObjectionExamples = () =>
     setObjectionConfig([
       {
-        tipo: "medo",
+        tipo: "medo_receio_de_dor",
         rotulo: "Medo / receio de dor",
         gatilhos: ["medo", "dói", "dor", "receio"],
         video_url: "",
-        abordagem: "validar o receio; técnicas modernas e anestesia; convite sem compromisso",
+        abordagem:
+          "Validar o receio; explicar técnicas modernas e anestesia; convidar sem compromisso.",
       },
       {
-        tipo: "financeira",
+        tipo: "preco_investimento",
         rotulo: "Preço / investimento",
-        gatilhos: ["caro", "não posso pagar", "tá puxado"],
+        gatilhos: ["caro", "não posso pagar", "tá puxado", "está caro"],
         video_url: "",
-        abordagem: "ancorar valor; parcelamento; nunca desconto seco",
+        abordagem:
+          "Ancorar valor e resultado; falar em parcelamento; nunca oferecer desconto seco.",
       },
       {
-        tipo: "distancia",
+        tipo: "distancia_deslocamento",
         rotulo: "Distância / deslocamento",
         gatilhos: ["longe", "moro longe", "outra cidade"],
         video_url: "",
-        abordagem: "prova social (pacientes de outras cidades); vale a pena",
+        abordagem:
+          "Prova social (pacientes de outras cidades); reforçar que vale o deslocamento.",
       },
     ]);
 
@@ -224,14 +244,18 @@ export function AgentSettingsSheet({
           }))
           .filter((k) => k.nome),
         objectionConfig: objectionConfig
-          .map((o) => ({
-            tipo: o.tipo.trim().toLowerCase(),
-            rotulo: o.rotulo.trim(),
-            gatilhos: o.gatilhos.map((g) => g.trim()).filter(Boolean),
-            video_url: o.video_url.trim(),
-            abordagem: o.abordagem.trim(),
-          }))
-          .filter((o) => o.tipo),
+          .map((o) => {
+            const rotulo = o.rotulo.trim();
+            const tipo = slugifyObjectionTipo(rotulo) || o.tipo.trim().toLowerCase();
+            return {
+              tipo,
+              rotulo,
+              gatilhos: o.gatilhos.map((g) => g.trim()).filter(Boolean),
+              video_url: o.video_url.trim(),
+              abordagem: o.abordagem.trim(),
+            };
+          })
+          .filter((o) => o.rotulo && o.tipo),
         handoffConfig: {
           telefones: handoffPhone.trim() ? [handoffPhone.trim()] : [],
         },
@@ -802,51 +826,55 @@ export function AgentSettingsSheet({
               <div>
                 <p className="text-sm font-medium">Quebra de objeções</p>
                 <p className="text-xs text-muted-foreground">
-                  Quando o lead demonstrar uma destas objeções, a IA acolhe e pode enviar o vídeo
-                  cadastrado (uma vez por lead).
+                  Quando o lead falar algo parecido com as frases abaixo, a IA responde e pode
+                  mandar o vídeo (uma vez por lead). O WhatsApp só entrega vídeo até ~16MB — arquivos
+                  maiores são comprimidos automaticamente ao subir.
                 </p>
               </div>
 
               {objectionConfig.length === 0 && (
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground/70">
-                    Nenhuma objeção configurada. Cadastre as objeções que a IA deve reconhecer (ex.:
-                    preço, medo, distância).
+                    Nenhuma objeção cadastrada ainda. Use exemplos ou adicione a primeira (preço,
+                    medo, distância…).
                   </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={loadObjectionExamples}
-                  >
-                    <Sparkles className="h-4 w-4" /> Carregar exemplos
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={loadObjectionExamples}
+                    >
+                      <Sparkles className="h-4 w-4" /> Carregar exemplos
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={addObjection}
+                    >
+                      <Plus className="h-4 w-4" /> Adicionar objeção
+                    </Button>
+                  </div>
                 </div>
               )}
 
               {objectionConfig.map((o, i) => {
-                const tipoInvalido = o.tipo.trim() !== "" && /\s|[A-Z]/.test(o.tipo);
+                const slug = slugifyObjectionTipo(o.rotulo) || o.tipo;
                 const tipoDuplicado =
-                  o.tipo.trim() !== "" &&
+                  slug !== "" &&
                   objectionConfig.filter(
-                    (x) => x.tipo.trim().toLowerCase() === o.tipo.trim().toLowerCase(),
-                  ).length > 1;
+                    (x, j) =>
+                      j !== i &&
+                      (slugifyObjectionTipo(x.rotulo) || x.tipo).toLowerCase() === slug.toLowerCase(),
+                  ).length > 0;
+                const isUploading = uploadingIdx === i;
                 return (
-                  <div key={i} className="space-y-2 rounded-lg border border-border p-3">
-                    <div className="flex items-center gap-2">
-                      <Input
-                        className="flex-[2]"
-                        value={o.tipo}
-                        onChange={(e) => setObjection(i, { tipo: e.target.value })}
-                        placeholder="Tipo (ex.: financeira)"
-                      />
-                      <Input
-                        className="flex-[3]"
-                        value={o.rotulo}
-                        onChange={(e) => setObjection(i, { rotulo: e.target.value })}
-                        placeholder="Rótulo (ex.: Preço / investimento)"
-                      />
+                  <div key={i} className="space-y-3 rounded-lg border border-border p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium">Objeção {i + 1}</p>
                       <Button
                         type="button"
                         variant="ghost"
@@ -858,93 +886,144 @@ export function AgentSettingsSheet({
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                    {(tipoInvalido || tipoDuplicado) && (
+
+                    <Field label="Nome da objeção">
+                      <Input
+                        value={o.rotulo}
+                        onChange={(e) => setObjection(i, { rotulo: e.target.value })}
+                        placeholder="Ex.: Preço / investimento"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Título interno para você identificar. A IA usa isso + as frases abaixo.
+                      </p>
+                    </Field>
+                    {tipoDuplicado && (
                       <p className="text-xs text-destructive">
-                        {tipoInvalido ? "Use minúsculo, sem espaço. " : ""}
-                        {tipoDuplicado ? "Tipo repetido." : ""}
+                        Já existe outra objeção com nome parecido — use nomes distintos.
                       </p>
                     )}
-                    <Input
-                      value={o.gatilhos.join(", ")}
-                      onChange={(e) =>
-                        setObjection(i, {
-                          gatilhos: e.target.value
-                            .split(",")
-                            .map((g) => g.trim())
-                            .filter(Boolean),
-                        })
-                      }
-                      placeholder="Gatilhos, separados por vírgula (ex.: caro, não posso pagar)"
-                    />
-                    {o.video_url ? (
-                      <div className="flex items-center gap-2 rounded-md border border-success/40 bg-success/10 px-2.5 py-1.5 text-xs">
-                        <Video className="h-3.5 w-3.5 shrink-0 text-success" />
-                        <span className="font-medium text-success">Vídeo anexado ✓</span>
-                        <a
-                          href={o.video_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="underline"
-                        >
-                          assistir
-                        </a>
-                        <button
-                          type="button"
-                          className="ml-auto text-muted-foreground hover:text-destructive"
-                          onClick={() => setObjection(i, { video_url: "" })}
-                          title="Remover vídeo"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="gap-1.5"
-                          disabled={uploadingIdx === i}
-                          onClick={() => {
-                            const input = document.createElement("input");
-                            input.type = "file";
-                            input.accept = "video/*";
-                            input.onchange = async () => {
-                              const file = input.files?.[0];
-                              if (!file) return;
-                              setUploadingIdx(i);
-                              try {
-                                const url = await uploadObjectionVideo(agent.id, file);
-                                setObjection(i, { video_url: url });
-                                toast.success("Vídeo enviado — salve para aplicar.");
-                              } catch (err) {
-                                toast.error(
-                                  err instanceof Error ? err.message : "Falha no upload.",
-                                );
-                              } finally {
-                                setUploadingIdx(null);
-                              }
-                            };
-                            input.click();
-                          }}
-                        >
-                          <Video className="h-4 w-4" />
-                          {uploadingIdx === i ? "Enviando…" : "Subir vídeo"}
-                        </Button>
-                        <Input
-                          className="flex-1"
-                          value={o.video_url}
-                          onChange={(e) => setObjection(i, { video_url: e.target.value })}
-                          placeholder="…ou cole a URL do vídeo (vazio = só texto)"
-                        />
-                      </div>
-                    )}
-                    <Textarea
-                      rows={2}
-                      value={o.abordagem}
-                      onChange={(e) => setObjection(i, { abordagem: e.target.value })}
-                      placeholder="Abordagem: como a IA deve responder essa objeção"
-                    />
+
+                    <Field label="Frases que o lead usa">
+                      <Input
+                        value={o.gatilhos.join(", ")}
+                        onChange={(e) =>
+                          setObjection(i, {
+                            gatilhos: e.target.value
+                              .split(",")
+                              .map((g) => g.trim())
+                              .filter(Boolean),
+                          })
+                        }
+                        placeholder="Ex.: está caro, não tenho dinheiro, tá puxado"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Separe por vírgula. São pistas para a IA reconhecer a objeção na conversa.
+                      </p>
+                    </Field>
+
+                    <Field label="Como a IA deve responder">
+                      <Textarea
+                        rows={3}
+                        value={o.abordagem}
+                        onChange={(e) => setObjection(i, { abordagem: e.target.value })}
+                        placeholder="Ex.: Validar o receio, ancorar valor, oferecer parcelamento; nunca dar desconto seco"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Orientação de tom e argumentos — não precisa ser o texto literal da mensagem.
+                      </p>
+                    </Field>
+
+                    <Field label="Vídeo de resposta (opcional)">
+                      {o.video_url ? (
+                        <div className="flex items-center gap-2 rounded-md border border-success/40 bg-success/10 px-2.5 py-1.5 text-xs">
+                          <Video className="h-3.5 w-3.5 shrink-0 text-success" />
+                          <span className="font-medium text-success">Vídeo anexado ✓</span>
+                          <a
+                            href={o.video_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline"
+                          >
+                            assistir
+                          </a>
+                          <button
+                            type="button"
+                            className="ml-auto text-muted-foreground hover:text-destructive"
+                            onClick={() => setObjection(i, { video_url: "" })}
+                            title="Remover vídeo"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="gap-1.5"
+                              disabled={isUploading}
+                              onClick={() => {
+                                const input = document.createElement("input");
+                                input.type = "file";
+                                input.accept = "video/*";
+                                input.onchange = async () => {
+                                  const file = input.files?.[0];
+                                  if (!file) return;
+                                  setUploadingIdx(i);
+                                  setUploadProgress({ phase: "compressing", ratio: 0 });
+                                  try {
+                                    const { url, sizeBytes } = await uploadObjectionVideo(
+                                      agent.id,
+                                      file,
+                                      (p) => setUploadProgress(p),
+                                    );
+                                    setObjection(i, { video_url: url });
+                                    const mb = (sizeBytes / (1024 * 1024)).toFixed(1);
+                                    toast.success(
+                                      `Vídeo pronto (~${mb} MB). Salve as configurações.`,
+                                    );
+                                  } catch (err) {
+                                    toast.error(
+                                      err instanceof Error ? err.message : "Falha no upload.",
+                                    );
+                                  } finally {
+                                    setUploadingIdx(null);
+                                    setUploadProgress(null);
+                                  }
+                                };
+                                input.click();
+                              }}
+                            >
+                              <Video className="h-4 w-4" />
+                              {isUploading
+                                ? uploadProgress?.phase === "uploading"
+                                  ? "Enviando…"
+                                  : "Comprimindo…"
+                                : "Subir vídeo"}
+                            </Button>
+                            {isUploading && uploadProgress && (
+                              <span className="text-[11px] text-muted-foreground">
+                                {uploadProgress.phase === "compressing"
+                                  ? "Comprimindo para WhatsApp…"
+                                  : "Enviando…"}{" "}
+                                {Math.round(uploadProgress.ratio * 100)}%
+                              </span>
+                            )}
+                          </div>
+                          <Input
+                            value={o.video_url}
+                            onChange={(e) => setObjection(i, { video_url: e.target.value })}
+                            placeholder="Ou cole a URL de um vídeo já leve (≤16MB)"
+                          />
+                          <p className="text-[11px] text-muted-foreground">
+                            Pode subir arquivos grandes: comprimimos para ~16MB antes de enviar. Sem
+                            vídeo, a IA responde só por texto.
+                          </p>
+                        </div>
+                      )}
+                    </Field>
                   </div>
                 );
               })}

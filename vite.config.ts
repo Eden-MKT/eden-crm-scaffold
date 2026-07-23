@@ -12,4 +12,10 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // ffmpeg.wasm: não pré-bundlar (carrega core via CDN blob URL sob demanda).
+  vite: {
+    optimizeDeps: {
+      exclude: ["@ffmpeg/ffmpeg", "@ffmpeg/util"],
+    },
+  },
 });
