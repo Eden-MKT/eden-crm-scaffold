@@ -42,6 +42,7 @@ const FUNCTIONS = [
   "orchestrator-run",
   "analyze-conversation",
   "connection-health",
+  "dispatch-worker",
 ];
 
 const sharedDir = join(FUNCTIONS_DIR, "_shared");
