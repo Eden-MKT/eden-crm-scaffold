@@ -284,13 +284,40 @@ export function AgentSettingsSheet({
 
   const handleImprove = async () => {
     setImproving(true);
+    // Guarda o texto atual para o "Desfazer" — a melhoria substitui o campo.
+    const anterior = form.systemPrompt;
     try {
-      const improved = await improvePrompt(agent.id);
-      if (improved) {
-        set("systemPrompt", improved);
-        toast.success("Prompt melhorado — revise e clique em Salvar.");
-      } else {
+      // Envia o texto do editor (não o salvo no banco) p/ não perder edições pendentes.
+      const { prompt, missing, shrunk } = await improvePrompt(agent.id, anterior);
+      if (!prompt) {
         toast.error("Não foi possível gerar o prompt.");
+        return;
+      }
+      set("systemPrompt", prompt);
+      const desfazer = {
+        label: "Desfazer",
+        onClick: () => set("systemPrompt", anterior),
+      };
+      // A melhoria deveria só reorganizar. Dois sinais de perda: dados que
+      // sumiram e encurtamento (regras resumidas). Avisa em ambos, com desfazer.
+      if (missing.length) {
+        toast.warning(`Prompt melhorado, mas ${missing.length} dado(s) podem ter ficado de fora`, {
+          description: missing.slice(0, 12).join(" · "),
+          duration: 20000,
+          action: desfazer,
+        });
+      } else if (shrunk) {
+        const pct = Math.round((1 - prompt.length / Math.max(1, anterior.length)) * 100);
+        toast.warning(`Prompt melhorado, mas ficou ${pct}% menor`, {
+          description:
+            "Os dados concretos foram preservados, mas alguma regra pode ter sido resumida. Revise antes de salvar.",
+          duration: 20000,
+          action: desfazer,
+        });
+      } else {
+        toast.success("Prompt melhorado sem perder informações — revise e clique em Salvar.", {
+          action: desfazer,
+        });
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao melhorar o prompt.");
