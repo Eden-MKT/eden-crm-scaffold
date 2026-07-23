@@ -29,13 +29,19 @@ Deno.serve(async (req) => {
 
   const { data: agent } = await db
     .from("whatsapp_agents")
-    .select("id, instance_name")
+    .select("id, instance_name, connection_error")
     .eq("id", row.agent_id)
     .single();
 
   try {
     if (!agent?.instance_name) {
       return json({ status: "disconnected" });
+    }
+    // Número banido/bloqueado: avisa na hora, sem nem tocar na Evolution nem
+    // gerar QR (seria inútil). connection_error só fica setado enquanto não
+    // conectou — um evento "open" no webhook zera a coluna.
+    if (agent.connection_error) {
+      return json({ status: "blocked", message: agent.connection_error });
     }
     const st = (await evo.connectionState(agent.instance_name)) as {
       instance?: { state?: string };

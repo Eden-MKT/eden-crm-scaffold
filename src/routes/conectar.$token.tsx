@@ -10,12 +10,13 @@ export const Route = createFileRoute("/conectar/$token")({
   component: ConnectPage,
 });
 
-type Status = "loading" | "connecting" | "connected" | "expired" | "error";
+type Status = "loading" | "connecting" | "connected" | "expired" | "error" | "blocked" | "waiting";
 
 function ConnectPage() {
   const { token } = Route.useParams();
   const [status, setStatus] = useState<Status>("loading");
   const [qr, setQr] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const stopped = useRef(false);
 
   useEffect(() => {
@@ -39,9 +40,18 @@ function ConnectPage() {
           stopped.current = true;
           return;
         }
+        if (data.status === "blocked") {
+          setMessage(data.message ?? null);
+          setStatus("blocked");
+          stopped.current = true;
+          return;
+        }
         if (data.qrBase64) {
           setQr(data.qrBase64);
           setStatus("connecting");
+        } else if (data.status === "disconnected") {
+          // Instância ainda não preparada pelo time → aguarda (não trava em "Gerando…").
+          setStatus("waiting");
         }
       } catch {
         setStatus("error");
@@ -95,9 +105,22 @@ function ConnectPage() {
               <p className="text-sm text-destructive">
                 Este link expirou. Peça um novo link à equipe.
               </p>
+            ) : status === "blocked" ? (
+              <div className="space-y-2">
+                <div className="text-4xl">🚫</div>
+                <p className="font-medium text-destructive">Não foi possível conectar</p>
+                <p className="text-sm text-muted-foreground">
+                  {message ?? "Este número parece estar bloqueado/banido pelo WhatsApp."} Fale com a
+                  equipe para usar outro número.
+                </p>
+              </div>
             ) : status === "error" ? (
               <p className="text-sm text-destructive">
                 Não foi possível carregar. Tentando novamente…
+              </p>
+            ) : status === "waiting" ? (
+              <p className="text-sm text-muted-foreground">
+                Preparando sua conexão… Assim que estiver pronta, o código aparece aqui.
               </p>
             ) : qrSrc ? (
               <img src={qrSrc} alt="QR code" className="h-60 w-60 rounded-lg bg-white p-2" />

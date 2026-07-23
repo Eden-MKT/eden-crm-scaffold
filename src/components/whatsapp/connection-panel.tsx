@@ -36,12 +36,14 @@ export function ConnectionPanel({ agent, clientName, open, onOpenChange }: Conne
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [pairPhone, setPairPhone] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [blockReason, setBlockReason] = useState<string | null>(null);
   const hasInstance = Boolean(agent.instanceName);
 
   const refreshStatus = async () => {
     try {
       const r = await evolutionManager.status(agent.id);
       setStatus(r.status as typeof status);
+      setBlockReason(r.status === "connected" ? null : (r.blockReason ?? null));
       if (r.status === "connected") {
         setQr(null);
         setPairingCode(null);
@@ -157,6 +159,13 @@ export function ConnectionPanel({ agent, clientName, open, onOpenChange }: Conne
             </div>
             <ConnectionBadge status={status} />
           </div>
+
+          {blockReason && status !== "connected" && (
+            <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-foreground">
+              <span className="text-lg leading-none">🚫</span>
+              <p>{blockReason}</p>
+            </div>
+          )}
 
           {qr && status !== "connected" && (
             <div className="flex flex-col items-center gap-2 rounded-lg border border-border p-4">

@@ -18,7 +18,8 @@ export const evolutionManager = {
       agentId,
       ...(number ? { number } : {}),
     }),
-  status: (agentId: string) => invoke<{ status: string }>("status", { agentId }),
+  status: (agentId: string) =>
+    invoke<{ status: string; blockReason?: string | null }>("status", { agentId }),
   logout: (agentId: string) => invoke<{ ok: boolean }>("logout", { agentId }),
   deleteInstance: (agentId: string) => invoke<{ ok: boolean }>("delete_instance", { agentId }),
   sendManual: (conversationId: string, text: string) =>

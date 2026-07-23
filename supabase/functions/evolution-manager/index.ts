@@ -51,13 +51,10 @@ Deno.serve(async (req) => {
         if (!agent) return json({ error: "Agent not found" }, 404);
         const instanceName = agent.instance_name ?? instanceNameFor(agentId);
 
-        // Se já existe, garante limpeza antes de recriar.
-        try {
-          await evo.deleteInstance(instanceName);
-        } catch {
-          /* pode não existir ainda */
-        }
-        await evo.createInstance({
+        // ensureCleanInstance faz delete + ESPERA a propagação + retry no 403
+        // "name already in use" (o delete da Evolution é assíncrono). O caminho
+        // ingênuo delete→create imediato estourava a função nesse 403.
+        await evo.ensureCleanInstance({
           instanceName,
           webhookUrl: WEBHOOK_URL,
           webhookToken: WEBHOOK_TOKEN(),
@@ -107,7 +104,7 @@ Deno.serve(async (req) => {
         const agentId = String(payload.agentId);
         const { data: agent } = await db
           .from("whatsapp_agents")
-          .select("instance_name")
+          .select("instance_name, connection_error")
           .eq("id", agentId)
           .single();
         if (!agent?.instance_name) return json({ status: "disconnected" });
@@ -116,7 +113,9 @@ Deno.serve(async (req) => {
         };
         const status = mapState(r.instance?.state ?? "close");
         await db.from("whatsapp_agents").update({ status }).eq("id", agentId);
-        return json({ status });
+        // blockReason: motivo do último bloqueio/banimento (setado pelo webhook);
+        // some sozinho quando a conta conecta (state open limpa a coluna).
+        return json({ status, blockReason: agent.connection_error ?? null });
       }
 
       case "logout": {

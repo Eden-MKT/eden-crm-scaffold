@@ -102,7 +102,14 @@ async function handleConnection(db: DB, instance: string, data: Record<string, u
   const status =
     state === "open" ? "connected" : state === "connecting" ? "connecting" : "disconnected";
   const patch: Record<string, unknown> = { status };
+  // Motivo do fechamento (Baileys/lastDisconnect). 403 = forbidden: o número
+  // foi recusado pelo WhatsApp — sinal forte de banimento/bloqueio.
+  // deno-lint-ignore no-explicit-any
+  const reason = Number(
+    (data.statusReason as number) ?? (data as any)?.lastDisconnect?.error?.output?.statusCode ?? 0,
+  );
   if (state === "open") {
+    patch.connection_error = null; // conectou: limpa qualquer aviso anterior
     try {
       const info = (await evo.fetchInstances(instance)) as Array<{
         ownerJid?: string;
@@ -113,6 +120,11 @@ async function handleConnection(db: DB, instance: string, data: Record<string, u
     } catch {
       /* best-effort */
     }
+  } else if (state === "close" && reason === 403) {
+    // Conservador: só o 403 vira "banido"; logout normal é 401/440 e não deve
+    // gerar falso alarme.
+    patch.connection_error =
+      "Número bloqueado/banido pelo WhatsApp — a conexão foi recusada (403).";
   }
   await db.from("whatsapp_agents").update(patch).eq("instance_name", instance);
 }
