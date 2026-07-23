@@ -5,10 +5,7 @@ import { toast } from "sonner";
 
 import { updateAgent, whatsappKeys } from "@/lib/whatsapp/queries";
 import { improvePrompt } from "@/lib/whatsapp/improve-prompt";
-import {
-  slugifyObjectionTipo,
-  uploadObjectionVideo,
-} from "@/lib/whatsapp/objection-video";
+import { slugifyObjectionTipo, uploadObjectionVideo } from "@/lib/whatsapp/objection-video";
 import {
   DEFAULT_AGENDA_HOURS,
   WEEKDAYS,
@@ -212,8 +209,7 @@ export function AgentSettingsSheet({
         rotulo: "Distância / deslocamento",
         gatilhos: ["longe", "moro longe", "outra cidade"],
         video_url: "",
-        abordagem:
-          "Prova social (pacientes de outras cidades); reforçar que vale o deslocamento.",
+        abordagem: "Prova social (pacientes de outras cidades); reforçar que vale o deslocamento.",
       },
     ]);
 
@@ -827,8 +823,8 @@ export function AgentSettingsSheet({
                 <p className="text-sm font-medium">Quebra de objeções</p>
                 <p className="text-xs text-muted-foreground">
                   Quando o lead falar algo parecido com as frases abaixo, a IA responde e pode
-                  mandar o vídeo (uma vez por lead). O WhatsApp só entrega vídeo até ~16MB — arquivos
-                  maiores são comprimidos automaticamente ao subir.
+                  mandar o vídeo (uma vez por lead). O WhatsApp só entrega vídeo até ~16MB —
+                  arquivos maiores são comprimidos automaticamente ao subir.
                 </p>
               </div>
 
@@ -868,7 +864,8 @@ export function AgentSettingsSheet({
                   objectionConfig.filter(
                     (x, j) =>
                       j !== i &&
-                      (slugifyObjectionTipo(x.rotulo) || x.tipo).toLowerCase() === slug.toLowerCase(),
+                      (slugifyObjectionTipo(x.rotulo) || x.tipo).toLowerCase() ===
+                        slug.toLowerCase(),
                   ).length > 0;
                 const isUploading = uploadingIdx === i;
                 return (
@@ -904,16 +901,9 @@ export function AgentSettingsSheet({
                     )}
 
                     <Field label="Frases que o lead usa">
-                      <Input
-                        value={o.gatilhos.join(", ")}
-                        onChange={(e) =>
-                          setObjection(i, {
-                            gatilhos: e.target.value
-                              .split(",")
-                              .map((g) => g.trim())
-                              .filter(Boolean),
-                          })
-                        }
+                      <GatilhosInput
+                        value={o.gatilhos}
+                        onCommit={(gatilhos) => setObjection(i, { gatilhos })}
                         placeholder="Ex.: está caro, não tenho dinheiro, tá puxado"
                       />
                       <p className="text-[11px] text-muted-foreground">
@@ -929,7 +919,8 @@ export function AgentSettingsSheet({
                         placeholder="Ex.: Validar o receio, ancorar valor, oferecer parcelamento; nunca dar desconto seco"
                       />
                       <p className="text-[11px] text-muted-foreground">
-                        Orientação de tom e argumentos — não precisa ser o texto literal da mensagem.
+                        Orientação de tom e argumentos — não precisa ser o texto literal da
+                        mensagem.
                       </p>
                     </Field>
 
@@ -1063,6 +1054,46 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <Label className="text-xs text-muted-foreground">{label}</Label>
       {children}
     </div>
+  );
+}
+
+// Campo de gatilhos separados por vírgula. Guarda o texto CRU em estado local
+// enquanto o usuário digita (para não travar a vírgula/espaço) e só converte
+// para array na hora de salvar. Re-sincroniza quando o valor externo muda e o
+// campo não está em edição (ex.: trocou/removeu um card de objeção).
+function GatilhosInput({
+  value,
+  onCommit,
+  placeholder,
+}: {
+  value: string[];
+  onCommit: (v: string[]) => void;
+  placeholder?: string;
+}) {
+  const canonical = value.join(", ");
+  const [text, setText] = useState(canonical);
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) setText(canonical);
+  }, [canonical, focused]);
+
+  return (
+    <Input
+      value={text}
+      placeholder={placeholder}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      onChange={(e) => {
+        setText(e.target.value);
+        onCommit(
+          e.target.value
+            .split(",")
+            .map((g) => g.trim())
+            .filter(Boolean),
+        );
+      }}
+    />
   );
 }
 
