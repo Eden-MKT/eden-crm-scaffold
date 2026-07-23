@@ -91,11 +91,20 @@ export function AgentSettingsSheet({
     promptInjectionEnabled: agent.promptInjectionEnabled,
   });
   const [improving, setImproving] = useState(false);
-  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<{
-    phase: "compressing" | "uploading";
-    ratio: number;
-  } | null>(null);
+  // Progresso de upload POR card (índice) — permite subir vários vídeos em
+  // paralelo sem um cancelar o outro (o estado único anterior era compartilhado:
+  // iniciar o 2º trocava o índice e o finally do 1º derrubava o 2º).
+  type UpProgress = { phase: "compressing" | "uploading"; ratio: number };
+  const [uploads, setUploads] = useState<Record<number, UpProgress>>({});
+  const setUploadAt = (idx: number, p: UpProgress | null) =>
+    setUploads((u) => {
+      if (p === null) {
+        const next = { ...u };
+        delete next[idx];
+        return next;
+      }
+      return { ...u, [idx]: p };
+    });
   const [extraFields, setExtraFields] = useState<AgentExtraField[]>(agent.extraFields);
   const [services, setServices] = useState<AgentService[]>(agent.agendaServices);
   const [hours, setHours] = useState<AgendaHours>(agent.agendaHours ?? DEFAULT_AGENDA_HOURS);
@@ -867,7 +876,8 @@ export function AgentSettingsSheet({
                       (slugifyObjectionTipo(x.rotulo) || x.tipo).toLowerCase() ===
                         slug.toLowerCase(),
                   ).length > 0;
-                const isUploading = uploadingIdx === i;
+                const up = uploads[i];
+                const isUploading = up != null;
                 return (
                   <div key={i} className="space-y-3 rounded-lg border border-border p-3">
                     <div className="flex items-center justify-between gap-2">
@@ -962,13 +972,12 @@ export function AgentSettingsSheet({
                                 input.onchange = async () => {
                                   const file = input.files?.[0];
                                   if (!file) return;
-                                  setUploadingIdx(i);
-                                  setUploadProgress({ phase: "compressing", ratio: 0 });
+                                  setUploadAt(i, { phase: "compressing", ratio: 0 });
                                   try {
                                     const { url, sizeBytes } = await uploadObjectionVideo(
                                       agent.id,
                                       file,
-                                      (p) => setUploadProgress(p),
+                                      (p) => setUploadAt(i, p),
                                     );
                                     setObjection(i, { video_url: url });
                                     const mb = (sizeBytes / (1024 * 1024)).toFixed(1);
@@ -980,26 +989,25 @@ export function AgentSettingsSheet({
                                       err instanceof Error ? err.message : "Falha no upload.",
                                     );
                                   } finally {
-                                    setUploadingIdx(null);
-                                    setUploadProgress(null);
+                                    setUploadAt(i, null);
                                   }
                                 };
                                 input.click();
                               }}
                             >
                               <Video className="h-4 w-4" />
-                              {isUploading
-                                ? uploadProgress?.phase === "uploading"
+                              {up
+                                ? up.phase === "uploading"
                                   ? "Enviando…"
                                   : "Comprimindo…"
                                 : "Subir vídeo"}
                             </Button>
-                            {isUploading && uploadProgress && (
+                            {up && (
                               <span className="text-[11px] text-muted-foreground">
-                                {uploadProgress.phase === "compressing"
+                                {up.phase === "compressing"
                                   ? "Comprimindo para WhatsApp…"
                                   : "Enviando…"}{" "}
-                                {Math.round(uploadProgress.ratio * 100)}%
+                                {Math.round(up.ratio * 100)}%
                               </span>
                             )}
                           </div>
