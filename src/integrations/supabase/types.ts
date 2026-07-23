@@ -848,6 +848,376 @@ export interface Database {
         };
         Relationships: [];
       };
+      wa_accounts: {
+        Row: {
+          id: string;
+          provider: string;
+          phone_number_id: string | null;
+          waba_id: string | null;
+          display_number: string | null;
+          evolution_instance: string | null;
+          quality_tier: string;
+          messaging_limit: string | null;
+          status: string;
+          throughput_msg_por_segundo: number;
+          pausado_em: string | null;
+          pausado_motivo: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          provider: string;
+          phone_number_id?: string | null;
+          waba_id?: string | null;
+          display_number?: string | null;
+          evolution_instance?: string | null;
+          quality_tier?: string;
+          messaging_limit?: string | null;
+          status?: string;
+          throughput_msg_por_segundo?: number;
+          pausado_em?: string | null;
+          pausado_motivo?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          provider?: string;
+          phone_number_id?: string | null;
+          waba_id?: string | null;
+          display_number?: string | null;
+          evolution_instance?: string | null;
+          quality_tier?: string;
+          messaging_limit?: string | null;
+          status?: string;
+          throughput_msg_por_segundo?: number;
+          pausado_em?: string | null;
+          pausado_motivo?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      wa_templates: {
+        Row: {
+          id: string;
+          wa_account_id: string;
+          nome: string;
+          categoria: string;
+          idioma: string;
+          status_meta: string;
+          corpo: string;
+          var_map: Json;
+          tem_botao_optout: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          wa_account_id: string;
+          nome: string;
+          categoria: string;
+          idioma?: string;
+          status_meta?: string;
+          corpo: string;
+          var_map?: Json;
+          tem_botao_optout?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          wa_account_id?: string;
+          nome?: string;
+          categoria?: string;
+          idioma?: string;
+          status_meta?: string;
+          corpo?: string;
+          var_map?: Json;
+          tem_botao_optout?: boolean;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "wa_templates_wa_account_id_fkey";
+            columns: ["wa_account_id"];
+            referencedRelation: "wa_accounts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      dispatch_contacts: {
+        Row: {
+          id: string;
+          telefone: string;
+          nome: string | null;
+          empresa: string | null;
+          nicho: string | null;
+          origem: string | null;
+          opt_in: boolean;
+          opt_in_source: string | null;
+          opt_in_at: string | null;
+          base_legal_lgpd: string | null;
+          contatado: boolean;
+          ultimo_disparo_em: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          telefone: string;
+          nome?: string | null;
+          empresa?: string | null;
+          nicho?: string | null;
+          origem?: string | null;
+          opt_in?: boolean;
+          opt_in_source?: string | null;
+          opt_in_at?: string | null;
+          base_legal_lgpd?: string | null;
+          contatado?: boolean;
+          ultimo_disparo_em?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          telefone?: string;
+          nome?: string | null;
+          empresa?: string | null;
+          nicho?: string | null;
+          origem?: string | null;
+          opt_in?: boolean;
+          opt_in_source?: string | null;
+          opt_in_at?: string | null;
+          base_legal_lgpd?: string | null;
+          contatado?: boolean;
+          ultimo_disparo_em?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      suppression_list: {
+        Row: {
+          id: string;
+          telefone: string;
+          motivo: string;
+          origem: string | null;
+          criado_em: string;
+        };
+        Insert: {
+          id?: string;
+          telefone: string;
+          motivo: string;
+          origem?: string | null;
+          criado_em?: string;
+        };
+        Update: {
+          id?: string;
+          telefone?: string;
+          motivo?: string;
+          origem?: string | null;
+          criado_em?: string;
+        };
+        Relationships: [];
+      };
+      campaigns: {
+        Row: {
+          id: string;
+          nome: string;
+          template_id: string | null;
+          corpo_livre: string | null;
+          wa_account_id: string;
+          status: string;
+          janela_hora_inicio: number;
+          janela_hora_fim: number;
+          cap_diario: number;
+          cooldown_dias: number;
+          criado_por: string | null;
+          disparado_por: string | null;
+          disparado_em: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          nome: string;
+          template_id?: string | null;
+          corpo_livre?: string | null;
+          wa_account_id: string;
+          status?: string;
+          janela_hora_inicio?: number;
+          janela_hora_fim?: number;
+          cap_diario?: number;
+          cooldown_dias?: number;
+          criado_por?: string | null;
+          disparado_por?: string | null;
+          disparado_em?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          nome?: string;
+          template_id?: string | null;
+          corpo_livre?: string | null;
+          wa_account_id?: string;
+          status?: string;
+          janela_hora_inicio?: number;
+          janela_hora_fim?: number;
+          cap_diario?: number;
+          cooldown_dias?: number;
+          criado_por?: string | null;
+          disparado_por?: string | null;
+          disparado_em?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaigns_template_id_fkey";
+            columns: ["template_id"];
+            referencedRelation: "wa_templates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaigns_wa_account_id_fkey";
+            columns: ["wa_account_id"];
+            referencedRelation: "wa_accounts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      dispatch_queue: {
+        Row: {
+          id: string;
+          campaign_id: string;
+          contact_id: string;
+          variables: Json;
+          status: string;
+          motivo_supressao: string | null;
+          scheduled_at: string;
+          locked_at: string | null;
+          tentativas: number;
+          last_error: string | null;
+        };
+        Insert: {
+          id?: string;
+          campaign_id: string;
+          contact_id: string;
+          variables?: Json;
+          status?: string;
+          motivo_supressao?: string | null;
+          scheduled_at?: string;
+          locked_at?: string | null;
+          tentativas?: number;
+          last_error?: string | null;
+        };
+        Update: {
+          id?: string;
+          campaign_id?: string;
+          contact_id?: string;
+          variables?: Json;
+          status?: string;
+          motivo_supressao?: string | null;
+          scheduled_at?: string;
+          locked_at?: string | null;
+          tentativas?: number;
+          last_error?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "dispatch_queue_campaign_id_fkey";
+            columns: ["campaign_id"];
+            referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "dispatch_queue_contact_id_fkey";
+            columns: ["contact_id"];
+            referencedRelation: "dispatch_contacts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      wa_message_log: {
+        Row: {
+          id: string;
+          wamid: string | null;
+          campaign_id: string | null;
+          contact_id: string | null;
+          wa_account_id: string | null;
+          direcao: string;
+          status: string | null;
+          error_code: string | null;
+          error_title: string | null;
+          sent_at: string | null;
+          delivered_at: string | null;
+          read_at: string | null;
+          failed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          wamid?: string | null;
+          campaign_id?: string | null;
+          contact_id?: string | null;
+          wa_account_id?: string | null;
+          direcao: string;
+          status?: string | null;
+          error_code?: string | null;
+          error_title?: string | null;
+          sent_at?: string | null;
+          delivered_at?: string | null;
+          read_at?: string | null;
+          failed_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          wamid?: string | null;
+          campaign_id?: string | null;
+          contact_id?: string | null;
+          wa_account_id?: string | null;
+          direcao?: string;
+          status?: string | null;
+          error_code?: string | null;
+          error_title?: string | null;
+          sent_at?: string | null;
+          delivered_at?: string | null;
+          read_at?: string | null;
+          failed_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "wa_message_log_campaign_id_fkey";
+            columns: ["campaign_id"];
+            referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      dispatch_audit_log: {
+        Row: {
+          id: string;
+          actor_id: string | null;
+          acao: string;
+          entidade: string;
+          entidade_id: string | null;
+          payload: Json;
+          criado_em: string;
+        };
+        Insert: {
+          id?: string;
+          actor_id?: string | null;
+          acao: string;
+          entidade: string;
+          entidade_id?: string | null;
+          payload?: Json;
+          criado_em?: string;
+        };
+        Update: {
+          id?: string;
+          actor_id?: string | null;
+          acao?: string;
+          entidade?: string;
+          entidade_id?: string | null;
+          payload?: Json;
+          criado_em?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       // Clientes visíveis ao papel markei — sem colunas financeiras/contratuais.

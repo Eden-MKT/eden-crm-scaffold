@@ -14,6 +14,8 @@ import { Stagger, StaggerItem } from "@/components/ui/fade-in";
 import { PageHeader } from "@/components/ui/page-header";
 import { AgentCard } from "@/components/whatsapp/agent-card";
 import { AgentHubDialog } from "@/components/whatsapp/agent-hub-dialog";
+import { DispatchPanel } from "@/components/dispatch/dispatch-panel";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/ia-whatsapp")({
   head: () => ({
@@ -38,6 +40,7 @@ function IaWhatsappPage() {
 
   const [selected, setSelected] = useState<AgentWithClient | null>(null);
   const [configOnly, setConfigOnly] = useState(false);
+  const [view, setView] = useState<"agentes" | "disparador">("agentes");
 
   const usd = (n: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -82,38 +85,62 @@ function IaWhatsappPage() {
         subtitle="Agentes de atendimento por IA no WhatsApp de cada cliente."
       />
 
-      <Stagger className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        {cards.map((c) => (
-          <StaggerItem key={c.title}>
-            <StatCard title={c.title} value={c.value} accent={c.accent} icon={c.icon} />
-          </StaggerItem>
+      <div className="inline-flex w-fit rounded-lg border border-border bg-muted/40 p-1">
+        {(["agentes", "disparador"] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setView(v)}
+            className={cn(
+              "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+              view === v
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {v === "agentes" ? "Agentes" : "Disparador"}
+          </button>
         ))}
-      </Stagger>
-
-      <div className="min-h-0 flex-1 overflow-y-auto pb-4">
-        {(items?.length ?? 0) === 0 ? (
-          <p className="pt-10 text-center text-sm text-muted-foreground">
-            Cadastre clientes para criar agentes de IA.
-          </p>
-        ) : (
-          <div className="grid auto-rows-min grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-            {items?.map((item) => (
-              <AgentCard
-                key={item.client.id}
-                item={item}
-                onOpen={() => {
-                  setConfigOnly(false);
-                  setSelected(item);
-                }}
-                onConfigure={() => {
-                  setConfigOnly(true);
-                  setSelected(item);
-                }}
-              />
-            ))}
-          </div>
-        )}
       </div>
+
+      {view === "disparador" ? (
+        <DispatchPanel />
+      ) : (
+        <>
+          <Stagger className="grid grid-cols-2 gap-3 md:grid-cols-5">
+            {cards.map((c) => (
+              <StaggerItem key={c.title}>
+                <StatCard title={c.title} value={c.value} accent={c.accent} icon={c.icon} />
+              </StaggerItem>
+            ))}
+          </Stagger>
+
+          <div className="min-h-0 flex-1 overflow-y-auto pb-4">
+            {(items?.length ?? 0) === 0 ? (
+              <p className="pt-10 text-center text-sm text-muted-foreground">
+                Cadastre clientes para criar agentes de IA.
+              </p>
+            ) : (
+              <div className="grid auto-rows-min grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                {items?.map((item) => (
+                  <AgentCard
+                    key={item.client.id}
+                    item={item}
+                    onOpen={() => {
+                      setConfigOnly(false);
+                      setSelected(item);
+                    }}
+                    onConfigure={() => {
+                      setConfigOnly(true);
+                      setSelected(item);
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {selected && (
         <AgentHubDialog
