@@ -127,9 +127,12 @@ export function ConnectionPanel({ agent, clientName, open, onOpenChange }: Conne
       toast.success("Link copiado! Envie ao cliente.", { description: url });
     });
 
+  // Desconectar exclui a instância por completo (não só logout): remove a sessão
+  // antiga no Evolution e zera o vínculo, evitando "conexão fantasma". A próxima
+  // conexão sempre começa limpa em "Criar conexão + QR".
   const disconnect = () =>
     run("logout", async () => {
-      await evolutionManager.logout(agent.id);
+      await evolutionManager.deleteInstance(agent.id);
       setStatus("disconnected");
       setQr(null);
       setPairingCode(null);
