@@ -43,6 +43,7 @@ const FUNCTIONS = [
   "analyze-conversation",
   "connection-health",
   "dispatch-worker",
+  "wa-cloud-webhook",
 ];
 
 const sharedDir = join(FUNCTIONS_DIR, "_shared");

@@ -30,6 +30,7 @@ import {
   type PatientRecord,
 } from "../_shared/capabilities.ts";
 import { registrarObjecao, registrarTentativaVideo } from "../_shared/objection.ts";
+import { processDispatchInbound } from "../_shared/dispatch-optout.ts";
 import { resolveLeadPhone } from "../_shared/phone.ts";
 import { syncMonday } from "../_shared/monday.ts";
 
@@ -331,6 +332,34 @@ async function handleMessage(db: DB, instance: string, data: Record<string, unkn
     throw insErr;
   }
 
+  // Disparador (FASE 3): inbound de contato rastreado abre janela de 24h,
+  // marca 'contatado' e detecta opt-out. Opt-out → confirma e encerra AQUI
+  // (a IA nunca responde a um pedido de descadastro).
+  if (!fromMe) {
+    let disp: Awaited<ReturnType<typeof processDispatchInbound>> = {
+      tracked: false,
+      optedOut: false,
+    };
+    try {
+      disp = await processDispatchInbound(
+        db,
+        remoteJid.split("@")[0],
+        extracted.content,
+        "evolution",
+      );
+    } catch (e) {
+      console.error("processDispatchInbound error", e);
+    }
+    if (disp.tracked && disp.optedOut) {
+      try {
+        await evo.sendText(instance, remoteJid, disp.confirmMsg ?? "", 0);
+      } catch (e) {
+        console.error("opt-out confirm error", e);
+      }
+      return;
+    }
+  }
+
   const preview = extracted.content.slice(0, 120);
 
   if (fromMe) {
@@ -366,9 +395,7 @@ async function handleMessage(db: DB, instance: string, data: Record<string, unkn
     (globalThis as any).EdgeRuntime?.waitUntil(
       (async () => {
         await new Promise((r) => setTimeout(r, readDelay));
-        await evo.markMessageAsRead(instance, [
-          { id: evolutionId, fromMe: false, remoteJid },
-        ]);
+        await evo.markMessageAsRead(instance, [{ id: evolutionId, fromMe: false, remoteJid }]);
       })().catch((e: unknown) => console.error("markAsRead error", e)),
     );
   }
