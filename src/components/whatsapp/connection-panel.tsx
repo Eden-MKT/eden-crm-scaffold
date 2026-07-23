@@ -37,7 +37,10 @@ export function ConnectionPanel({ agent, clientName, open, onOpenChange }: Conne
   const [pairPhone, setPairPhone] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [blockReason, setBlockReason] = useState<string | null>(null);
-  const hasInstance = Boolean(agent.instanceName);
+  // Flip local: assim que a instância é criada, já mostramos os botões (link etc.)
+  // sem esperar o refetch da lista de agentes chegar via prop.
+  const [justCreated, setJustCreated] = useState(false);
+  const hasInstance = Boolean(agent.instanceName) || justCreated;
 
   const refreshStatus = async () => {
     try {
@@ -91,11 +94,13 @@ export function ConnectionPanel({ agent, clientName, open, onOpenChange }: Conne
   const createAndQr = () =>
     run("create", async () => {
       await evolutionManager.createInstance(agent.id);
+      // Instância criada: libera os botões (link etc.) na hora e atualiza a lista.
+      setJustCreated(true);
+      setStatus("connecting");
       queryClient.invalidateQueries({ queryKey: whatsappKeys.agents() });
       const r = await evolutionManager.qr(agent.id);
       setQr(r.base64);
       setPairingCode(null);
-      setStatus("connecting");
     });
 
   const genQr = () =>
@@ -138,6 +143,7 @@ export function ConnectionPanel({ agent, clientName, open, onOpenChange }: Conne
       setStatus("disconnected");
       setQr(null);
       setPairingCode(null);
+      setJustCreated(false);
       queryClient.invalidateQueries({ queryKey: whatsappKeys.agents() });
     });
 
@@ -164,6 +170,13 @@ export function ConnectionPanel({ agent, clientName, open, onOpenChange }: Conne
             <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-foreground">
               <span className="text-lg leading-none">🚫</span>
               <p>{blockReason}</p>
+            </div>
+          )}
+
+          {busy === "create" && !qr && (
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-secondary/50 p-3 text-sm text-muted-foreground">
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              <p>Preparando a conexão… isso pode levar alguns segundos.</p>
             </div>
           )}
 
