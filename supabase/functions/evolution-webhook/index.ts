@@ -586,10 +586,11 @@ async function runPipeline(
   await new Promise((r) => setTimeout(r, delayMs));
 
   // Claim atômico: só a invocação dona da última mensagem inbound responde.
-  const { data: claimed } = await db.rpc("claim_ai_run", {
+  const { data: claimed, error: claimErr } = await db.rpc("claim_ai_run", {
     p_conversation_id: conversationId,
     p_message_id: triggerMessageId,
   });
+  if (claimErr) console.error("claim_ai_run error:", claimErr.message);
   if (!claimed) return;
 
   // "digitando…" durante toda a geração (buffer + OpenAI + tools) — sem isso o
@@ -1078,6 +1079,12 @@ async function runPipeline(
     // Roda após o resumo para o Contexto do card já refletir o estado atual.
     // Falha isolada dentro de syncMonday — nunca quebra o atendimento.
     await syncMonday(db, agent, conversationId, leadPhone);
+  } catch (e) {
+    // Sem catch, um erro aqui virava rejeição silenciosa no waitUntil e a IA
+    // ficava muda sem rastro (foi assim que a ambiguidade do claim_ai_run passou
+    // despercebida). Registrar o erro é essencial para diagnóstico.
+    // deno-lint-ignore no-explicit-any
+    console.error("runPipeline error:", (e as any)?.stack ?? String(e));
   } finally {
     await db
       .from("whatsapp_conversations")
