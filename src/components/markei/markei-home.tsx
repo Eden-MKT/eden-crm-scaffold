@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { getRouteApi, useNavigate } from "@tanstack/react-router";
+import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import {
+  ArrowLeft,
   Bot,
+  Calendar,
   CalendarClock,
   ChartPie,
   LayoutDashboard,
@@ -13,8 +15,10 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
+import { resolveTeamMember, teamAvatarUrl } from "@/lib/team";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { BottomTabBar, type BottomTabItem } from "@/components/layout/bottom-tab-bar";
 import { MarkeiDashboard } from "./markei-dashboard";
@@ -23,6 +27,7 @@ import { MarkeiLeads } from "./markei-leads";
 import { MarkeiFollowups } from "./markei-followups";
 import { MarkeiAnalytics } from "./markei-analytics";
 import { MarkeiChat } from "./markei-chat";
+import { MarkeiAgenda } from "./markei-agenda";
 import { MarkeiSettings } from "./markei-settings";
 import { MarkeiMoreDrawer } from "./markei-more-drawer";
 
@@ -31,6 +36,7 @@ export type MarkeiView =
   | "ias"
   | "leads"
   | "followups"
+  | "agenda"
   | "analytics"
   | "chat"
   | "settings";
@@ -40,6 +46,7 @@ export const MARKEI_VIEWS: MarkeiView[] = [
   "ias",
   "leads",
   "followups",
+  "agenda",
   "analytics",
   "chat",
   "settings",
@@ -50,12 +57,13 @@ const NAV: { key: MarkeiView; title: string; icon: typeof LayoutDashboard }[] = 
   { key: "ias", title: "Minhas IAs", icon: Bot },
   { key: "leads", title: "Leads", icon: Users },
   { key: "followups", title: "Follow-ups", icon: CalendarClock },
+  { key: "agenda", title: "Agenda", icon: Calendar },
   { key: "analytics", title: "Analytics", icon: ChartPie },
   { key: "chat", title: "Chat & Histórico", icon: MessagesSquare },
   { key: "settings", title: "Configurações", icon: Settings },
 ];
 
-const MORE_VIEWS: MarkeiView[] = ["ias", "analytics", "settings"];
+const MORE_VIEWS: MarkeiView[] = ["ias", "agenda", "analytics", "settings"];
 
 const routeApi = getRouteApi("/gestao");
 
@@ -73,6 +81,11 @@ export function MarkeiHome() {
 
   const userName =
     (user?.user_metadata as { name?: string } | undefined)?.name ?? user?.email ?? "";
+
+  const teamMember = resolveTeamMember(user?.email);
+  const userAvatarUrl =
+    (user?.user_metadata as { avatar_url?: string } | undefined)?.avatar_url ||
+    (teamMember ? teamAvatarUrl(teamMember) : undefined);
 
   const tabItems: BottomTabItem[] = [
     {
@@ -116,12 +129,25 @@ export function MarkeiHome() {
     <div className="app-bg flex h-[100dvh] w-full text-foreground">
       {/* Sidebar — só desktop */}
       <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-sidebar md:flex">
-        <div className="flex items-center gap-2 px-4 py-4">
+        <Link
+          to="/"
+          className="flex items-center gap-2 px-4 py-4 transition-opacity hover:opacity-80"
+          title="Voltar ao CRM"
+        >
           <img src="/favicon-64x64.png" alt="Éden" className="h-8 w-8 rounded-md" />
           <div className="flex flex-col leading-tight">
             <span className="font-semibold">Éden</span>
             <span className="text-xs text-muted-foreground">Dashboard IA</span>
           </div>
+        </Link>
+        <div className="px-3 pb-1">
+          <Link
+            to="/"
+            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent/20 hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Voltar ao CRM
+          </Link>
         </div>
         <nav className="flex-1 space-y-1 px-3 py-2">
           {NAV.map((item) => {
@@ -144,8 +170,14 @@ export function MarkeiHome() {
             );
           })}
         </nav>
-        <div className="border-t border-border p-3">
-          <p className="truncate px-1 text-xs text-muted-foreground">{userName}</p>
+        <div className="flex items-center gap-2 border-t border-border p-3">
+          <Avatar className="h-8 w-8 shrink-0">
+            {userAvatarUrl && <AvatarImage src={userAvatarUrl} alt="" />}
+            <AvatarFallback className="bg-primary/15 text-xs font-medium text-primary">
+              {(userName || "?").charAt(0).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <p className="min-w-0 truncate text-xs text-muted-foreground">{userName}</p>
         </div>
       </aside>
 
@@ -163,6 +195,13 @@ export function MarkeiHome() {
             {NAV.find((n) => n.key === view)?.title}
           </p>
           <div className="ml-auto flex items-center gap-1">
+            <Link
+              to="/"
+              className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground md:hidden"
+              title="Voltar ao CRM"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
             <ThemeToggle />
             <Button variant="ghost" size="icon" onClick={() => void signOut()} title="Sair">
               <LogOut className="h-4 w-4" />
@@ -175,6 +214,7 @@ export function MarkeiHome() {
           {view === "ias" && <MarkeiIas />}
           {view === "leads" && <MarkeiLeads />}
           {view === "followups" && <MarkeiFollowups />}
+          {view === "agenda" && <MarkeiAgenda />}
           {view === "analytics" && <MarkeiAnalytics />}
           {view === "chat" && <MarkeiChat />}
           {view === "settings" && <MarkeiSettings />}

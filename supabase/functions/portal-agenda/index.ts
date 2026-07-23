@@ -1,7 +1,12 @@
 import { admin } from "../_shared/db.ts";
 import { json, preflight } from "../_shared/cors.ts";
 import { requirePortalClient } from "../_shared/portal.ts";
-import { createAppointment, type AgentService } from "../_shared/agenda.ts";
+import {
+  BOARD_STATUSES,
+  SLOT_BLOCKING_STATUSES,
+  createAppointment,
+  type AgentService,
+} from "../_shared/agenda.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return preflight();
@@ -123,7 +128,7 @@ Deno.serve(async (req) => {
         .from("appointments")
         .select("id")
         .eq("client_id", clientId)
-        .eq("status", "scheduled")
+        .in("status", [...SLOT_BLOCKING_STATUSES])
         .neq("id", id)
         .lt("starts_at", endsAt.toISOString())
         .gt("ends_at", startsAt.toISOString());
@@ -148,10 +153,33 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    if (body.action === "list_followups") {
+      if (!agent?.id) return json({ manual: [], auto: [] });
+      // Manuais agendados + fila automática (conversas em cadência), só do agente do cliente.
+      const { data: manual } = await db
+        .from("follow_ups")
+        .select("id, conversation_id, message, scheduled_at, status, sent_at")
+        .eq("agent_id", agent.id)
+        .order("scheduled_at", { ascending: false })
+        .limit(50);
+      const { data: auto } = await db
+        .from("whatsapp_conversations")
+        .select(
+          "id, contact_name, remote_jid, followup_stage, last_followup_at, followup_exhausted, last_message_at",
+        )
+        .eq("agent_id", agent.id)
+        .eq("converted", false)
+        .eq("human_takeover", false)
+        .gt("followup_stage", 0)
+        .order("last_followup_at", { ascending: false })
+        .limit(50);
+      return json({ manual: manual ?? [], auto: auto ?? [] });
+    }
+
     if (body.action === "set_status") {
       const id = String(body.appointmentId ?? "");
       const status = String(body.status ?? "");
-      if (!id || !["completed", "no_show", "scheduled"].includes(status)) {
+      if (!id || !(BOARD_STATUSES as readonly string[]).includes(status)) {
         return json({ error: "Dados inválidos." }, 400);
       }
       const { data: appt } = await db

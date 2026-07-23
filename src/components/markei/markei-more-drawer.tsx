@@ -1,4 +1,4 @@
-import { Bot, ChartPie, Settings } from "lucide-react";
+import { Bot, Calendar, ChartPie, Settings } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
@@ -6,6 +6,7 @@ import type { MarkeiView } from "./markei-home";
 
 const ITEMS: { key: MarkeiView; title: string; icon: typeof Bot }[] = [
   { key: "ias", title: "Minhas IAs", icon: Bot },
+  { key: "agenda", title: "Agenda", icon: Calendar },
   { key: "analytics", title: "Analytics", icon: ChartPie },
   { key: "settings", title: "Configurações", icon: Settings },
 ];

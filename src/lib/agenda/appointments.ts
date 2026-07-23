@@ -1,9 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import type { AppointmentStatus, BoardAppointmentStatus } from "@/lib/agenda/appointment-status";
+
+export type { AppointmentStatus, BoardAppointmentStatus } from "@/lib/agenda/appointment-status";
 
 type AppointmentRow = Database["public"]["Tables"]["appointments"]["Row"];
 
-export type AppointmentStatus = "scheduled" | "cancelled" | "completed" | "no_show";
 export type AppointmentSource = "ai" | "staff" | "client";
 
 export interface Appointment {
@@ -45,6 +47,8 @@ export const appointmentKeys = {
   all: ["appointments"] as const,
   byClient: (clientId: string, fromISO?: string, toISO?: string) =>
     [...appointmentKeys.all, clientId, fromISO ?? "", toISO ?? ""] as const,
+  allClients: (fromISO: string, toISO: string) =>
+    [...appointmentKeys.all, "all-clients", fromISO, toISO] as const,
 };
 
 // Agendamentos de um cliente no período (staff, RLS is_staff).
@@ -58,6 +62,20 @@ export async function fetchClientAppointments(
     .from("appointments")
     .select(APPT_COLS)
     .eq("client_id", clientId)
+    .neq("status", "cancelled")
+    .gte("ends_at", fromISO)
+    .lte("starts_at", toISO)
+    .order("starts_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(mapAppointment);
+}
+
+// Agendamentos de TODOS os clientes no período (staff, RLS is_staff) — visão
+// de gestão. O client_id volta mapeado (clientId) para filtro por IA/cliente.
+export async function fetchAllAppointments(fromISO: string, toISO: string): Promise<Appointment[]> {
+  const { data, error } = await supabase
+    .from("appointments")
+    .select(APPT_COLS)
     .neq("status", "cancelled")
     .gte("ends_at", fromISO)
     .lte("starts_at", toISO)
@@ -132,10 +150,10 @@ export async function cancelAppointment(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// Marca presença: compareceu (completed) / não compareceu (no_show) / desfazer (scheduled).
+// Atualiza status operacional (board Clinicorp). Cancelamento usa cancelAppointment.
 export async function setAppointmentStatus(
   id: string,
-  status: "completed" | "no_show" | "scheduled",
+  status: BoardAppointmentStatus,
 ): Promise<void> {
   const { error } = await supabase.from("appointments").update({ status }).eq("id", id);
   if (error) throw error;

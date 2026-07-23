@@ -10,7 +10,13 @@ import { Label } from "@/components/ui/label";
 import { WhatsappScene } from "./whatsapp-scene";
 import { PhoneChat } from "./phone-chat";
 
-export function LoginPage() {
+interface LoginPageProps {
+  /** "staff" (default): equipe Éden. "client": portal do cliente — muda só os textos do card. */
+  variant?: "staff" | "client";
+}
+
+export function LoginPage({ variant = "staff" }: LoginPageProps) {
+  const isClient = variant === "client";
   const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -113,9 +119,11 @@ export function LoginPage() {
             />
             <div className="mt-5 flex items-center justify-center gap-1.5 text-xs font-medium uppercase tracking-[0.18em] text-primary">
               <Sparkles className="h-3.5 w-3.5" />
-              Plataforma interna
+              {isClient ? "Portal do cliente" : "Plataforma interna"}
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">Acesso da equipe Éden.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {isClient ? "Acesso do cliente." : "Acesso da equipe Éden."}
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -128,7 +136,7 @@ export function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="voce@edenmarketing.com"
+                placeholder={isClient ? "voce@suaempresa.com" : "voce@edenmarketing.com"}
                 className="h-11 transition-shadow focus-visible:shadow-[0_0_0_4px_color-mix(in_oklab,var(--brand)_22%,transparent)]"
               />
             </div>

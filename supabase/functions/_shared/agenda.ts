@@ -133,6 +133,34 @@ export function resolveService(services: AgentService[], requested?: string): Ag
   return { label: list[0].label, durationMin: Number(list[0].durationMin) || 60 };
 }
 
+/** Status que ainda ocupam horário na grade (conflito / slots livres). */
+export const SLOT_BLOCKING_STATUSES = [
+  "scheduled",
+  "confirmed",
+  "waiting",
+  "in_service",
+  "late",
+] as const;
+
+/** Status de consulta futura ativa (não dispara follow-up de venda). */
+export const FUTURE_ACTIVE_STATUSES = [
+  "scheduled",
+  "confirmed",
+  "waiting",
+  "late",
+] as const;
+
+/** Status operacionais do board (sem cancelled). */
+export const BOARD_STATUSES = [
+  "scheduled",
+  "confirmed",
+  "waiting",
+  "in_service",
+  "completed",
+  "late",
+  "no_show",
+] as const;
+
 async function scheduledInRange(
   db: DB,
   clientId: string,
@@ -144,7 +172,7 @@ async function scheduledInRange(
     .from("appointments")
     .select("starts_at, ends_at")
     .eq("client_id", clientId)
-    .eq("status", "scheduled")
+    .in("status", [...SLOT_BLOCKING_STATUSES])
     .lt("starts_at", endUtc.toISOString())
     .gt("ends_at", startUtc.toISOString());
   if (ignoreAppointmentId) q = q.neq("id", ignoreAppointmentId);

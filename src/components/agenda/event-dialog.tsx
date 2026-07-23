@@ -16,6 +16,7 @@ import { clientsKeys, fetchClients } from "@/lib/clients/queries";
 import { useAuth } from "@/lib/auth";
 import { TEAM_MEMBERS } from "@/lib/team";
 import { cn } from "@/lib/utils";
+import { TeamAvatar } from "@/components/team-avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -176,12 +177,13 @@ export function EventDialog({ open, onOpenChange, event, defaultDate }: EventDia
                     type="button"
                     onClick={() => toggleAssignee(m.email)}
                     className={cn(
-                      "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                      "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
                       active
                         ? "border-primary bg-primary text-primary-foreground"
                         : "border-border text-muted-foreground hover:text-foreground",
                     )}
                   >
+                    <TeamAvatar member={m.key} className="h-4 w-4" />
                     {m.label}
                   </button>
                 );

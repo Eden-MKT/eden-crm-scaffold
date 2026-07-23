@@ -1,5 +1,6 @@
 import type { User } from "@supabase/supabase-js";
 
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 
 export type TeamMember = "filipe" | "joao" | null;
@@ -87,6 +88,15 @@ export function isPortalClientUser(user: User | null | undefined): boolean {
   if (!user) return false;
   const role = (user.app_metadata as { role?: string } | undefined)?.role;
   return role === "client" || !isStaffUser(user);
+}
+
+/**
+ * URL pública determinística da foto de perfil de um membro da equipe.
+ * O upload recíproco (markei-settings) mantém `team/<member>.jpg` atualizado,
+ * então cada um vê a foto do outro sem depender do user_metadata alheio.
+ */
+export function teamAvatarUrl(member: "filipe" | "joao"): string {
+  return supabase.storage.from("avatars").getPublicUrl(`team/${member}.jpg`).data.publicUrl;
 }
 
 export function isTeamConfigured(): boolean {

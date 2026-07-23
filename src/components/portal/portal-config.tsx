@@ -5,7 +5,6 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
-import { resolveTeamMember } from "@/lib/team";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,17 +18,16 @@ const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 interface ProfileMetadata {
   name?: string;
-  title?: string;
   avatar_url?: string;
 }
 
-// Configurações do painel Markei: perfil (Supabase Auth user_metadata) e aparência.
-export function MarkeiSettings() {
+// Configurações do portal do cliente: perfil (nome + foto no Supabase Auth
+// user_metadata) e aparência. Sem nada de equipe/staff.
+export function PortalConfig() {
   const { user } = useAuth();
   const meta = (user?.user_metadata as ProfileMetadata | undefined) ?? {};
 
   const [name, setName] = useState(meta.name ?? "");
-  const [title, setTitle] = useState(meta.title ?? "");
   const [avatarUrl, setAvatarUrl] = useState(meta.avatar_url ?? "");
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -45,20 +43,12 @@ export function MarkeiSettings() {
     setUploading(true);
     try {
       const path = `${user.id}/avatar-${Date.now()}.jpg`;
-      const { error } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+      const { error } = await supabase.storage
+        .from("avatars")
+        .upload(path, file, { upsert: true, contentType: file.type });
       if (error) throw error;
       const { data } = supabase.storage.from("avatars").getPublicUrl(path);
       setAvatarUrl(data.publicUrl);
-
-      // Cópia em caminho fixo da equipe: permite que o outro membro veja esta
-      // foto por URL determinística (team/<member>.jpg), sem ler o metadata alheio.
-      const member = resolveTeamMember(user.email);
-      if (member) {
-        const { error: teamError } = await supabase.storage
-          .from("avatars")
-          .upload(`team/${member}.jpg`, file, { upsert: true, contentType: file.type });
-        if (teamError) throw teamError;
-      }
       toast.success("Foto carregada — clique em Salvar para aplicar.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao enviar a foto.");
@@ -70,7 +60,7 @@ export function MarkeiSettings() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.auth.updateUser({
-        data: { name: name.trim(), title: title.trim(), avatar_url: avatarUrl },
+        data: { name: name.trim(), avatar_url: avatarUrl },
       });
       if (error) throw error;
     },
@@ -78,12 +68,8 @@ export function MarkeiSettings() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao salvar o perfil."),
   });
 
-  // Só para exibição: diz se o que está na tela ainda difere do que foi salvo.
   const hasChanges =
-    name.trim() !== (meta.name ?? "").trim() ||
-    title.trim() !== (meta.title ?? "").trim() ||
-    avatarUrl !== (meta.avatar_url ?? "");
-
+    name.trim() !== (meta.name ?? "").trim() || avatarUrl !== (meta.avatar_url ?? "");
   const saving = saveMutation.isPending;
 
   return (
@@ -103,7 +89,7 @@ export function MarkeiSettings() {
             icon={<UserRound className="h-4 w-4" />}
             tone="var(--brand)"
             title="Perfil"
-            description="É assim que seu nome e sua foto aparecem no painel e nos relatórios."
+            description="É assim que seu nome e sua foto aparecem no portal."
             footer={
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <SaveStatus saving={saving} hasChanges={hasChanges} />
@@ -122,7 +108,6 @@ export function MarkeiSettings() {
               </div>
             }
           >
-            {/* Prévia do perfil + troca de foto: o usuário vê o resultado antes de salvar. */}
             <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border/70 bg-muted/30 p-4 text-center sm:flex-row sm:text-left">
               <Avatar className="h-20 w-20 shrink-0 ring-2 ring-border/60 ring-offset-2 ring-offset-background">
                 {avatarUrl && <AvatarImage src={avatarUrl} alt="Sua foto de perfil" />}
@@ -132,14 +117,9 @@ export function MarkeiSettings() {
               </Avatar>
 
               <div className="min-w-0 flex-1 space-y-2">
-                <div className="min-w-0 space-y-0.5">
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {name.trim() || "Sem nome definido"}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {title.trim() || "Sem cargo definido"}
-                  </p>
-                </div>
+                <p className="truncate text-sm font-medium text-foreground">
+                  {name.trim() || "Sem nome definido"}
+                </p>
 
                 <div className="flex flex-col items-center gap-1.5 sm:items-start">
                   <Button
@@ -174,38 +154,33 @@ export function MarkeiSettings() {
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field id="profile-name" label="Nome" help="Usado nas saudações do painel.">
-                <Input
-                  id="profile-name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Seu nome"
-                />
-              </Field>
-              <Field id="profile-title" label="Cargo" help="Como você é identificada na equipe.">
-                <Input
-                  id="profile-title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Ex.: Sócia, Gestora…"
-                />
-              </Field>
+            <div className="space-y-2">
+              <Label htmlFor="profile-name" className="text-xs font-medium">
+                Nome
+              </Label>
+              <Input
+                id="profile-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Seu nome"
+              />
             </div>
 
-            <Field
-              id="profile-email"
-              label="E-mail de acesso"
-              help="É com este e-mail que você entra no painel. Para trocá-lo, fale com o suporte."
-              badge={
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="profile-email" className="text-xs font-medium">
+                  E-mail de acesso
+                </Label>
                 <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
                   <Lock className="h-3 w-3" />
                   Não editável
                 </span>
-              }
-            >
+              </div>
               <Input id="profile-email" value={user?.email ?? ""} readOnly disabled />
-            </Field>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                É com este e-mail que você entra no portal. Para trocá-lo, fale com a equipe Éden.
+              </p>
+            </div>
           </SettingsSection>
         </StaggerItem>
 
@@ -218,7 +193,7 @@ export function MarkeiSettings() {
           >
             <div className="flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-muted/20 p-4">
               <div className="min-w-0 space-y-0.5">
-                <p className="text-sm font-medium text-foreground">Tema do painel</p>
+                <p className="text-sm font-medium text-foreground">Tema do portal</p>
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   Alterne entre claro e escuro. A escolha fica salva neste navegador.
                 </p>
@@ -232,10 +207,6 @@ export function MarkeiSettings() {
   );
 }
 
-/**
- * Bloco de configuração: ícone em cápsula tonal, título, uma linha explicando
- * o que a seção faz e um rodapé opcional para a ação principal.
- */
 function SettingsSection({
   icon,
   tone,
@@ -273,35 +244,6 @@ function SettingsSection({
   );
 }
 
-/** Campo de formulário com rótulo, ajuda e espaço para um selo à direita. */
-function Field({
-  id,
-  label,
-  help,
-  badge,
-  children,
-}: {
-  id: string;
-  label: string;
-  help?: string;
-  badge?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <Label htmlFor={id} className="text-xs font-medium">
-          {label}
-        </Label>
-        {badge}
-      </div>
-      {children}
-      {help && <p className="text-[11px] leading-relaxed text-muted-foreground">{help}</p>}
-    </div>
-  );
-}
-
-/** Diz em uma linha se há algo pendente de salvar — cor com significado. */
 function SaveStatus({ saving, hasChanges }: { saving: boolean; hasChanges: boolean }) {
   if (saving) {
     return (

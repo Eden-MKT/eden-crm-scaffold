@@ -4,6 +4,7 @@ import { HUMANIZE_RULES } from "./humanize.ts";
 import {
   buildAgendaPrompt,
   freeSlots,
+  FUTURE_ACTIVE_STATUSES,
   MEDICAL_PROMPT,
   resolveService,
   utcToZonedParts,
@@ -285,7 +286,7 @@ export async function handleVerificar(
       .from("appointments")
       .select("starts_at")
       .eq("conversation_id", conversationId)
-      .eq("status", "scheduled");
+      .in("status", [...FUTURE_ACTIVE_STATUSES]);
     ownTimes = (own ?? [])
       .map((o: { starts_at: string }) => utcToZonedParts(new Date(o.starts_at), tz))
       .filter((p: { dateISO: string }) => p.dateISO === args.data)

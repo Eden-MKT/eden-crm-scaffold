@@ -14,6 +14,7 @@ import {
   updateStaffAppointment,
   type Appointment,
 } from "@/lib/agenda/appointments";
+import type { BoardAppointmentStatus } from "@/lib/agenda/appointment-status";
 import type { WhatsappAgent } from "@/lib/whatsapp/types";
 import { cn } from "@/lib/utils";
 import { defaultPeriod, PeriodFilter } from "@/components/agenda/period-filter";
@@ -140,7 +141,7 @@ export function AgentAgendaPanel({ agent, clientName, open, onOpenChange }: Agen
   });
 
   const mark = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: "completed" | "no_show" | "scheduled" }) =>
+    mutationFn: ({ id, status }: { id: string; status: BoardAppointmentStatus }) =>
       setAppointmentStatus(id, status),
     onSuccess: () => invalidate(),
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao atualizar."),

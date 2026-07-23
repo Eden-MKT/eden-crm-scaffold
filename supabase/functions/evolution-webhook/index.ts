@@ -14,6 +14,7 @@ import {
 import {
   createAppointment,
   freeSlots,
+  FUTURE_ACTIVE_STATUSES,
   resolveService,
   utcToZonedParts,
   weekdayLabelPtBr,
@@ -470,7 +471,7 @@ async function handleAgendar(
     .from("appointments")
     .select("id, starts_at")
     .eq("conversation_id", conversationId)
-    .eq("status", "scheduled")
+    .in("status", [...FUTURE_ACTIVE_STATUSES])
     .gte("ends_at", new Date().toISOString())
     .order("starts_at", { ascending: true })
     .limit(1)
@@ -608,7 +609,7 @@ async function runPipeline(
       .from("appointments")
       .select("starts_at, service_label, status, conversation_id, patient_phone")
       .eq("client_id", String(agent.client_id))
-      .in("status", ["scheduled", "completed"])
+      .in("status", ["scheduled", "confirmed", "waiting", "late", "in_service", "completed"])
       .gte("starts_at", since);
     apptQuery = phone
       ? apptQuery.or(`conversation_id.eq.${conversationId},patient_phone.eq.${phone}`)
@@ -818,7 +819,7 @@ async function runPipeline(
               .from("appointments")
               .select("id, starts_at")
               .eq("conversation_id", conversationId)
-              .eq("status", "scheduled")
+              .in("status", [...FUTURE_ACTIVE_STATUSES])
               .gte("ends_at", new Date().toISOString())
               .order("starts_at", { ascending: true })
               .limit(1)
@@ -826,7 +827,10 @@ async function runPipeline(
             if (!next) {
               result = { ok: false, erro: "Nenhum agendamento futuro para confirmar." };
             } else {
-              await db.from("appointments").update({ confirmed: true }).eq("id", next.id);
+              await db
+                .from("appointments")
+                .update({ confirmed: true, status: "confirmed" })
+                .eq("id", next.id);
               result = { ok: true, confirmado: true };
             }
           } else if (tc.name === "cancelar_consulta" && agendaOn) {
@@ -834,7 +838,7 @@ async function runPipeline(
               .from("appointments")
               .select("id, starts_at")
               .eq("conversation_id", conversationId)
-              .eq("status", "scheduled")
+              .in("status", [...FUTURE_ACTIVE_STATUSES])
               .gte("ends_at", new Date().toISOString())
               .order("starts_at", { ascending: true })
               .limit(1)

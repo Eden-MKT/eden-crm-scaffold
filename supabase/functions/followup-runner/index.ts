@@ -10,7 +10,7 @@ import { requireCron, requireStaff } from "../_shared/portal.ts";
 import { chat } from "../_shared/openai.ts";
 import { chatCostUsd } from "../_shared/pricing.ts";
 import { splitBubbles, typingDelay } from "../_shared/humanize.ts";
-import { utcToZonedParts } from "../_shared/agenda.ts";
+import { utcToZonedParts, FUTURE_ACTIVE_STATUSES } from "../_shared/agenda.ts";
 import * as evo from "../_shared/evolution.ts";
 import { followupConfig } from "../_shared/capabilities.ts";
 
@@ -158,7 +158,7 @@ async function runAuto(db: DB) {
         .from("appointments")
         .select("id")
         .eq("conversation_id", conv.id)
-        .eq("status", "scheduled")
+        .in("status", [...FUTURE_ACTIVE_STATUSES])
         .gte("starts_at", new Date().toISOString())
         .limit(1)
         .maybeSingle();
@@ -186,14 +186,11 @@ async function runAuto(db: DB) {
           skipped++;
           continue;
         }
-        if (decision.mensagem) {
-          await sendBubbles(
-            db,
-            String(agent.instance_name),
-            conv.remote_jid,
-            conv.id,
-            decision.mensagem,
-          );
+        // Mensagem manual do estágio (quando preenchida) substitui o texto gerado;
+        // a decisão de ENVIAR continua sendo da IA (bom senso).
+        const texto = (stageCfg.mensagem || "").trim() || decision.mensagem;
+        if (texto) {
+          await sendBubbles(db, String(agent.instance_name), conv.remote_jid, conv.id, texto);
           sent++;
         }
       } catch (e) {

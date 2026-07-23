@@ -37,6 +37,7 @@ function IaWhatsappPage() {
   });
 
   const [selected, setSelected] = useState<AgentWithClient | null>(null);
+  const [configOnly, setConfigOnly] = useState(false);
 
   const usd = (n: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -97,7 +98,18 @@ function IaWhatsappPage() {
         ) : (
           <div className="grid auto-rows-min grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {items?.map((item) => (
-              <AgentCard key={item.client.id} item={item} onOpen={() => setSelected(item)} />
+              <AgentCard
+                key={item.client.id}
+                item={item}
+                onOpen={() => {
+                  setConfigOnly(false);
+                  setSelected(item);
+                }}
+                onConfigure={() => {
+                  setConfigOnly(true);
+                  setSelected(item);
+                }}
+              />
             ))}
           </div>
         )}
@@ -105,6 +117,7 @@ function IaWhatsappPage() {
 
       {selected && (
         <AgentHubDialog
+          initialSub={configOnly ? "settings" : null}
           item={selected}
           open={selected !== null}
           onOpenChange={(o) => !o && setSelected(null)}

@@ -93,6 +93,8 @@ export const DEFAULT_HANDOFF_CONFIG: HandoffConfig = { telefones: [] };
 export interface FollowupStageConfig {
   aposMinutos: number;
   tom: string;
+  /** Mensagem manual; vazia = IA gera na hora conforme o tom. */
+  mensagem: string;
 }
 
 export interface FollowupConfig {
@@ -107,9 +109,9 @@ export const DEFAULT_FOLLOWUP_CONFIG: FollowupConfig = {
   enabled: false,
   confirmEnabled: true,
   estagios: [
-    { aposMinutos: 720, tom: "leve — presuma que a pessoa se distraiu" },
-    { aposMinutos: 1440, tom: "respeitoso — retomada educada" },
-    { aposMinutos: 2880, tom: "último contato — gentil, deixe a porta aberta" },
+    { aposMinutos: 720, tom: "leve — presuma que a pessoa se distraiu", mensagem: "" },
+    { aposMinutos: 1440, tom: "respeitoso — retomada educada", mensagem: "" },
+    { aposMinutos: 2880, tom: "último contato — gentil, deixe a porta aberta", mensagem: "" },
   ],
 };
 
@@ -276,6 +278,7 @@ function parseFollowupConfig(raw: unknown): FollowupConfig {
       aposMinutos:
         Number(estagios[i]?.aposMinutos) > 0 ? Number(estagios[i]?.aposMinutos) : d.aposMinutos,
       tom: String(estagios[i]?.tom ?? "").trim() || d.tom,
+      mensagem: String(estagios[i]?.mensagem ?? "").trim(),
     })),
   };
 }

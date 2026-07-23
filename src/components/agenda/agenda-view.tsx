@@ -20,6 +20,7 @@ import { TEAM_MEMBERS, teamLabelForEmail, useTeamMember } from "@/lib/team";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
+import { TeamAvatar } from "@/components/team-avatar";
 import { EventDialog } from "./event-dialog";
 
 const WEEK_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -107,6 +108,7 @@ export function AgendaView() {
             <FilterChip
               key={m.key}
               label={m.label}
+              avatar={<TeamAvatar member={m.key} className="h-4 w-4" />}
               active={filter === m.email}
               onClick={() => setFilter(m.email)}
             />
@@ -212,10 +214,13 @@ export function AgendaView() {
 
 function FilterChip({
   label,
+  avatar,
   active,
   onClick,
 }: {
   label: string;
+  /** Avatarzinho opcional exibido antes do rótulo (membros da equipe). */
+  avatar?: React.ReactNode;
   active: boolean;
   onClick: () => void;
 }) {
@@ -224,12 +229,13 @@ function FilterChip({
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+        "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
         active
           ? "border-primary bg-primary text-primary-foreground"
           : "border-border text-muted-foreground hover:text-foreground",
       )}
     >
+      {avatar}
       {label}
     </button>
   );

@@ -1,12 +1,21 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Bot, Loader2, MessagesSquare, Phone, Search, Wifi } from "lucide-react";
+import {
+  AlertTriangle,
+  Bot,
+  Loader2,
+  MessagesSquare,
+  Phone,
+  Search,
+  Settings,
+  Wifi,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { fetchMarkeiMetrics, markeiKeys } from "@/lib/markei/queries";
 import type { MarkeiAgentSummary } from "@/lib/markei/types";
-import { setAgentAiEnabled } from "@/lib/whatsapp/queries";
-import type { AgentStatus } from "@/lib/whatsapp/types";
+import { ensureAgent, setAgentAiEnabled } from "@/lib/whatsapp/queries";
+import type { AgentStatus, WhatsappAgent } from "@/lib/whatsapp/types";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,6 +33,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Stagger, StaggerItem } from "@/components/ui/fade-in";
 import { Switch } from "@/components/ui/switch";
+import { AgentSettingsSheet } from "@/components/whatsapp/agent-settings-sheet";
 import { ConnectionBadge } from "@/components/whatsapp/status-badge";
 import { MetricCard } from "./metric-card";
 
@@ -50,6 +60,23 @@ function plural(n: number, singular: string, plural_: string): string {
 // da IA (única escrita permitida em whatsapp_agents para o papel markei).
 export function MarkeiIas() {
   const [q, setQ] = useState("");
+
+  // Sheet de configuração: o summary local não é o WhatsappAgent completo,
+  // então buscamos o agente via ensureAgent(clientId) ao clicar em Configurar.
+  const [configAgent, setConfigAgent] = useState<{
+    agent: WhatsappAgent;
+    clientName: string;
+  } | null>(null);
+
+  const configMutation = useMutation({
+    mutationFn: async (a: MarkeiAgentSummary) => ({
+      agent: await ensureAgent(a.clientId),
+      clientName: a.nome,
+    }),
+    onSuccess: (data) => setConfigAgent(data),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Falha ao abrir as configurações da IA."),
+  });
 
   const { data: m, isLoading } = useQuery({
     queryKey: markeiKeys.metrics(),
@@ -210,12 +237,29 @@ export function MarkeiIas() {
             <Stagger className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((a) => (
                 <StaggerItem key={a.agentId}>
-                  <AgentCard agent={a} />
+                  <AgentCard
+                    agent={a}
+                    configuring={
+                      configMutation.isPending && configMutation.variables?.agentId === a.agentId
+                    }
+                    onConfigure={() => configMutation.mutate(a)}
+                  />
                 </StaggerItem>
               ))}
             </Stagger>
           )}
         </>
+      )}
+
+      {configAgent && (
+        <AgentSettingsSheet
+          agent={configAgent.agent}
+          clientName={configAgent.clientName}
+          open
+          onOpenChange={(open) => {
+            if (!open) setConfigAgent(null);
+          }}
+        />
       )}
     </main>
   );
@@ -260,7 +304,15 @@ function EmptyState({
   );
 }
 
-function AgentCard({ agent }: { agent: MarkeiAgentSummary }) {
+function AgentCard({
+  agent,
+  configuring,
+  onConfigure,
+}: {
+  agent: MarkeiAgentSummary;
+  configuring: boolean;
+  onConfigure: () => void;
+}) {
   const queryClient = useQueryClient();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -349,6 +401,21 @@ function AgentCard({ agent }: { agent: MarkeiAgentSummary }) {
             onCheckedChange={() => setConfirmOpen(true)}
           />
         </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          disabled={configuring}
+          onClick={onConfigure}
+        >
+          {configuring ? (
+            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+          ) : (
+            <Settings className="mr-1.5 h-4 w-4" />
+          )}
+          Configurar
+        </Button>
       </CardContent>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>

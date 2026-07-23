@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Sparkles, Trash2 } from "lucide-react";
+import { Plus, Sparkles, Trash2, Video } from "lucide-react";
 import { toast } from "sonner";
 
 import { updateAgent, whatsappKeys } from "@/lib/whatsapp/queries";
 import { improvePrompt } from "@/lib/whatsapp/improve-prompt";
+import { uploadObjectionVideo } from "@/lib/whatsapp/objection-video";
 import {
   DEFAULT_AGENDA_HOURS,
   WEEKDAYS,
@@ -47,11 +48,13 @@ const FOLLOWUP_LABELS = ["1º follow-up", "2º follow-up", "3º follow-up"];
 interface FollowupStageUi {
   horas: number;
   tom: string;
+  mensagem: string;
 }
 
-const toStageUi = (aposMinutos: number, tom: string): FollowupStageUi => ({
-  horas: Math.max(1, Math.round(aposMinutos / 60)),
-  tom,
+const toStageUi = (s: { aposMinutos: number; tom: string; mensagem: string }): FollowupStageUi => ({
+  horas: Math.max(1, Math.round(s.aposMinutos / 60)),
+  tom: s.tom,
+  mensagem: s.mensagem,
 });
 
 interface AgentSettingsSheetProps {
@@ -88,6 +91,7 @@ export function AgentSettingsSheet({
     promptInjectionEnabled: agent.promptInjectionEnabled,
   });
   const [improving, setImproving] = useState(false);
+  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
   const [extraFields, setExtraFields] = useState<AgentExtraField[]>(agent.extraFields);
   const [services, setServices] = useState<AgentService[]>(agent.agendaServices);
   const [hours, setHours] = useState<AgendaHours>(agent.agendaHours ?? DEFAULT_AGENDA_HOURS);
@@ -99,7 +103,7 @@ export function AgentSettingsSheet({
   const [followupEnabled, setFollowupEnabled] = useState(agent.followupConfig.enabled);
   const [confirmEnabled, setConfirmEnabled] = useState(agent.followupConfig.confirmEnabled);
   const [followupStages, setFollowupStages] = useState<FollowupStageUi[]>(
-    agent.followupConfig.estagios.map((e) => toStageUi(e.aposMinutos, e.tom)),
+    agent.followupConfig.estagios.map(toStageUi),
   );
 
   // Re-sincroniza o estado local quando o agente mudar (outro cliente, dados atualizados).
@@ -131,7 +135,7 @@ export function AgentSettingsSheet({
     setHandoffPhone(agent.handoffConfig.telefones[0] ?? "");
     setFollowupEnabled(agent.followupConfig.enabled);
     setConfirmEnabled(agent.followupConfig.confirmEnabled);
-    setFollowupStages(agent.followupConfig.estagios.map((e) => toStageUi(e.aposMinutos, e.tom)));
+    setFollowupStages(agent.followupConfig.estagios.map(toStageUi));
   }, [agent]);
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
@@ -237,6 +241,7 @@ export function AgentSettingsSheet({
           estagios: followupStages.map((e) => ({
             aposMinutos: Math.max(1, Math.round(Number(e.horas) || 1)) * 60,
             tom: e.tom,
+            mensagem: e.mensagem.trim(),
           })),
         },
       }),
@@ -280,7 +285,7 @@ export function AgentSettingsSheet({
               <TabsTrigger value="agenda">Agenda</TabsTrigger>
               <TabsTrigger value="followups">Follow-ups</TabsTrigger>
               <TabsTrigger value="avancado">Avançado</TabsTrigger>
-              <TabsTrigger value="objecoes">Objeções</TabsTrigger>
+              <TabsTrigger value="objecoes">Objeções em vídeo</TabsTrigger>
             </TabsList>
           </div>
 
@@ -722,6 +727,14 @@ export function AgentSettingsSheet({
                     />
                   </Field>
                 </div>
+                <Field label="Mensagem (opcional)">
+                  <Textarea
+                    rows={2}
+                    value={e.mensagem}
+                    onChange={(ev) => setFollowupStage(i, { mensagem: ev.target.value })}
+                    placeholder="Digite a mensagem exata deste follow-up — deixe vazio para a IA escrever na hora conforme o tom. Use ||| para quebrar em mensagens."
+                  />
+                </Field>
               </Section>
             ))}
           </TabsContent>
@@ -863,11 +876,69 @@ export function AgentSettingsSheet({
                       }
                       placeholder="Gatilhos, separados por vírgula (ex.: caro, não posso pagar)"
                     />
-                    <Input
-                      value={o.video_url}
-                      onChange={(e) => setObjection(i, { video_url: e.target.value })}
-                      placeholder="URL do vídeo (opcional; vazio = só responde por texto)"
-                    />
+                    {o.video_url ? (
+                      <div className="flex items-center gap-2 rounded-md border border-success/40 bg-success/10 px-2.5 py-1.5 text-xs">
+                        <Video className="h-3.5 w-3.5 shrink-0 text-success" />
+                        <span className="font-medium text-success">Vídeo anexado ✓</span>
+                        <a
+                          href={o.video_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline"
+                        >
+                          assistir
+                        </a>
+                        <button
+                          type="button"
+                          className="ml-auto text-muted-foreground hover:text-destructive"
+                          onClick={() => setObjection(i, { video_url: "" })}
+                          title="Remover vídeo"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
+                          disabled={uploadingIdx === i}
+                          onClick={() => {
+                            const input = document.createElement("input");
+                            input.type = "file";
+                            input.accept = "video/*";
+                            input.onchange = async () => {
+                              const file = input.files?.[0];
+                              if (!file) return;
+                              setUploadingIdx(i);
+                              try {
+                                const url = await uploadObjectionVideo(agent.id, file);
+                                setObjection(i, { video_url: url });
+                                toast.success("Vídeo enviado — salve para aplicar.");
+                              } catch (err) {
+                                toast.error(
+                                  err instanceof Error ? err.message : "Falha no upload.",
+                                );
+                              } finally {
+                                setUploadingIdx(null);
+                              }
+                            };
+                            input.click();
+                          }}
+                        >
+                          <Video className="h-4 w-4" />
+                          {uploadingIdx === i ? "Enviando…" : "Subir vídeo"}
+                        </Button>
+                        <Input
+                          className="flex-1"
+                          value={o.video_url}
+                          onChange={(e) => setObjection(i, { video_url: e.target.value })}
+                          placeholder="…ou cole a URL do vídeo (vazio = só texto)"
+                        />
+                      </div>
+                    )}
                     <Textarea
                       rows={2}
                       value={o.abordagem}

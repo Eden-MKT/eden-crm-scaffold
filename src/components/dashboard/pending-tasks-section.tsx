@@ -1,11 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import {
-  ArrowRight,
-  CheckCircle2,
-  ClipboardList,
-  Settings,
-  UserX,
-} from "lucide-react";
+import { ArrowRight, CheckCircle2, ClipboardList, Settings, UserX } from "lucide-react";
 
 import { getPendingClientsForMember } from "@/lib/clients/pending";
 import { ASSIGNEE_COLORS } from "@/lib/clients/stages";
@@ -13,6 +7,7 @@ import type { Client } from "@/lib/clients/types";
 import type { TaskCompletion } from "@/lib/clients/task-queries";
 import { isTeamConfigured, TEAM_EMAILS, TEAM_MEMBER_LABELS, type TeamMember } from "@/lib/team";
 import { cn } from "@/lib/utils";
+import { TeamAvatar } from "@/components/team-avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FadeIn } from "@/components/ui/fade-in";
 
@@ -134,10 +129,11 @@ export function PendingTasksSection({
               Suas pendências
             </span>
             <span
-              className="rounded-full px-3 py-1 text-xs font-semibold"
+              className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
               style={{ backgroundColor: `${accent}22`, color: accent }}
             >
-              {TEAM_MEMBER_LABELS[member]}
+              {member && <TeamAvatar member={member} className="h-4 w-4" />}
+              {member ? TEAM_MEMBER_LABELS[member] : null}
             </span>
           </CardTitle>
         </CardHeader>
@@ -161,10 +157,7 @@ export function PendingTasksSection({
                     : 0;
 
                 return (
-                  <li
-                    key={item.client.id}
-                    className={cn(index > 0 && "border-t border-border/60")}
-                  >
+                  <li key={item.client.id} className={cn(index > 0 && "border-t border-border/60")}>
                     <Link
                       to="/clientes"
                       search={{ client: item.client.id, tab: "kanban" }}
@@ -193,9 +186,7 @@ export function PendingTasksSection({
                           </div>
                         )}
                       </div>
-                      <ArrowRight
-                        className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
-                      />
+                      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
                     </Link>
                   </li>
                 );

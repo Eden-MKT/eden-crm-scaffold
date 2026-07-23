@@ -38,3 +38,6 @@ dist-ssr
 
 # Fork de referência (projeto Markei) — não versionar no repo da Éden
 agent-insight-dashboard/
+
+# Vídeos locais (subir pela plataforma — aba Objeções em vídeo)
+videos/

@@ -30,6 +30,8 @@ export function handoffPhones(agent: Agent): string[] {
 export interface FollowupStage {
   aposMinutos: number;
   tom: string;
+  /** Mensagem manual do estágio; vazia = IA gera na hora conforme o tom. */
+  mensagem?: string;
 }
 
 // Cadência padrão: 12h → 24h → 48h; esgota 72h após o 3º sem resposta.
@@ -59,6 +61,7 @@ export function followupConfig(agent: Agent): {
       aposMinutos:
         Number(custom[i]?.aposMinutos) > 0 ? Number(custom[i]?.aposMinutos) : d.aposMinutos,
       tom: String(custom[i]?.tom ?? "").trim() || d.tom,
+      mensagem: String(custom[i]?.mensagem ?? "").trim(),
     })),
     esgotarAposMinutos:
       Number(cfg.esgotarAposMinutos) > 0 ? Number(cfg.esgotarAposMinutos) : DEFAULT_EXHAUST_MINUTES,
@@ -87,8 +90,12 @@ Depois de chamar a ferramenta, acolha e responda (nunca rebata seco):
 - Financeira: reconheça o investimento, ancore no VALOR (resultado, qualidade de vida) e ofereça alternativas (parcelamento). Nunca dê desconto seco.
 - Medo/receio: valide o sentimento, fale de técnica/segurança/conforto e convide a pessoa a conhecer o consultório.
 - Distância: use prova social (muitos vêm de longe pela qualidade) e reforce que vale a pena.
-- Estruture sua resposta em DUAS mensagens separadas por "|||": a primeira ACOLHE a preocupação, a segunda RESPONDE e conduz ao próximo passo. (O sistema insere o vídeo entre as duas.)
-- NUNCA anuncie, prometa ou cite o vídeo no texto ("vou te enviar um vídeo", "veja o vídeo abaixo"). Quem envia é o sistema; se o envio falhar, você terá prometido algo que a pessoa nunca recebe. Escreva as duas mensagens como se o vídeo não existisse.
+ROTEIRO PADRÃO da resposta à objeção (siga à risca):
+- Se a ferramenta retornou enviar_video = true, estruture em mensagens separadas por "|||":
+  (1) PRIMEIRA mensagem: acolha com empatia validando a objeção específica e ANUNCIE o vídeo — ex.: "Tudo bem se preocupar com o valor, é super normal 😊 ||| Deixa eu te mandar um vídeo do [nome do responsável, ex. Dr. Rafael] respondendo exatamente isso." (o sistema envia o vídeo logo após a primeira mensagem);
+  (2) mensagem seguinte (curta, opcional): complemento conforme a abordagem da objeção;
+  (3) ÚLTIMA mensagem: pergunte a opinião e puxe o agendamento — ex.: "O que você achou? Podemos agendar sua avaliação?".
+- Se a ferramenta retornou enviar_video = false (sem vídeo ou já enviado), NÃO mencione vídeo nenhum: acolha, responda pela abordagem e feche com o mesmo convite ao agendamento.
 
 CONDUÇÃO:
 - Sempre leve a conversa para o próximo passo concreto (a avaliação/consulta).
