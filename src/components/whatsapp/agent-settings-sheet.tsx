@@ -10,12 +10,19 @@ import {
   DEFAULT_AGENDA_HOURS,
   WEEKDAYS,
   type AgendaHours,
+  type AgendaTrip,
   type AgentExtraField,
   type AgentService,
   type KnowledgeItem,
   type ObjectionConfigItem,
   type WhatsappAgent,
 } from "@/lib/whatsapp/types";
+import {
+  DEFAULT_GUACUI_ADDRESS,
+  DEFAULT_GUACUI_LABEL,
+  newTripId,
+  parseSlotLines,
+} from "@/lib/agenda/trip-slots";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -108,6 +115,17 @@ export function AgentSettingsSheet({
   const [extraFields, setExtraFields] = useState<AgentExtraField[]>(agent.extraFields);
   const [services, setServices] = useState<AgentService[]>(agent.agendaServices);
   const [hours, setHours] = useState<AgendaHours>(agent.agendaHours ?? DEFAULT_AGENDA_HOURS);
+  const [trips, setTrips] = useState<AgendaTrip[]>(agent.agendaTrips ?? []);
+  /** Texto cru dos horários por dia (evita limpar a textarea no meio da digitação). */
+  const [tripSlotsText, setTripSlotsText] = useState<Record<string, string>>(() => {
+    const m: Record<string, string> = {};
+    for (const t of agent.agendaTrips ?? []) {
+      t.days.forEach((d, i) => {
+        m[`${t.id}:${i}`] = d.slots.join("\n");
+      });
+    }
+    return m;
+  });
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>(agent.knowledgeItems);
   const [objectionConfig, setObjectionConfig] = useState<ObjectionConfigItem[]>(
     agent.objectionConfig,
@@ -143,6 +161,16 @@ export function AgentSettingsSheet({
     setExtraFields(agent.extraFields);
     setServices(agent.agendaServices);
     setHours(agent.agendaHours ?? DEFAULT_AGENDA_HOURS);
+    setTrips(agent.agendaTrips ?? []);
+    {
+      const m: Record<string, string> = {};
+      for (const t of agent.agendaTrips ?? []) {
+        t.days.forEach((d, i) => {
+          m[`${t.id}:${i}`] = d.slots.join("\n");
+        });
+      }
+      setTripSlotsText(m);
+    }
     setKnowledgeItems(agent.knowledgeItems);
     setObjectionConfig(agent.objectionConfig);
     setHandoffPhone(agent.handoffConfig.telefones[0] ?? "");
@@ -168,6 +196,87 @@ export function AgentSettingsSheet({
     setHours((h) => ({ ...h, [key]: { ...h[key], ...patch } }));
   const setLunch = (patch: Partial<AgendaHours["lunch"]>) =>
     setHours((h) => ({ ...h, lunch: { ...h.lunch, ...patch } }));
+
+  const addTrip = () => {
+    const id = newTripId();
+    setTrips((ts) => [
+      ...ts,
+      {
+        id,
+        label: DEFAULT_GUACUI_LABEL,
+        address: DEFAULT_GUACUI_ADDRESS,
+        days: [{ date: "", slots: [] }],
+      },
+    ]);
+    setTripSlotsText((m) => ({ ...m, [`${id}:0`]: "" }));
+  };
+  const removeTrip = (tripId: string) => {
+    setTrips((ts) => ts.filter((t) => t.id !== tripId));
+    setTripSlotsText((m) => {
+      const next = { ...m };
+      for (const k of Object.keys(next)) {
+        if (k.startsWith(`${tripId}:`)) delete next[k];
+      }
+      return next;
+    });
+  };
+  const patchTrip = (tripId: string, patch: Partial<Pick<AgendaTrip, "label" | "address">>) =>
+    setTrips((ts) => ts.map((t) => (t.id === tripId ? { ...t, ...patch } : t)));
+  const addTripDay = (tripId: string) => {
+    setTrips((ts) => {
+      const t = ts.find((x) => x.id === tripId);
+      const idx = t?.days.length ?? 0;
+      setTripSlotsText((m) => ({ ...m, [`${tripId}:${idx}`]: "" }));
+      return ts.map((x) =>
+        x.id === tripId ? { ...x, days: [...x.days, { date: "", slots: [] }] } : x,
+      );
+    });
+  };
+  const removeTripDay = (tripId: string, dayIdx: number) => {
+    setTrips((ts) => {
+      const trip = ts.find((x) => x.id === tripId);
+      if (!trip) return ts;
+      const days = trip.days.filter((_, i) => i !== dayIdx);
+      setTripSlotsText((m) => {
+        const next: Record<string, string> = {};
+        for (const [k, v] of Object.entries(m)) {
+          if (!k.startsWith(`${tripId}:`)) next[k] = v;
+        }
+        days.forEach((d, i) => {
+          const prevIdx = i < dayIdx ? i : i + 1;
+          next[`${tripId}:${i}`] = m[`${tripId}:${prevIdx}`] ?? d.slots.join("\n");
+        });
+        return next;
+      });
+      return ts.map((x) => (x.id === tripId ? { ...x, days } : x));
+    });
+  };
+  const setTripDayDate = (tripId: string, dayIdx: number, date: string) =>
+    setTrips((ts) =>
+      ts.map((t) =>
+        t.id === tripId
+          ? {
+              ...t,
+              days: t.days.map((d, i) => (i === dayIdx ? { ...d, date } : d)),
+            }
+          : t,
+      ),
+    );
+  const setTripDaySlotsDraft = (tripId: string, dayIdx: number, text: string) => {
+    setTripSlotsText((m) => ({ ...m, [`${tripId}:${dayIdx}`]: text }));
+    setTrips((ts) =>
+      ts.map((t) =>
+        t.id === tripId
+          ? {
+              ...t,
+              days: t.days.map((d, i) =>
+                i === dayIdx ? { ...d, slots: parseSlotLines(text) } : d,
+              ),
+            }
+          : t,
+      ),
+    );
+  };
 
   const setKnowledge = (i: number, patch: Partial<KnowledgeItem>) =>
     setKnowledgeItems((ks) => ks.map((k, idx) => (idx === i ? { ...k, ...patch } : k)));
@@ -241,6 +350,16 @@ export function AgentSettingsSheet({
           }))
           .filter((s) => s.label),
         agendaHours: hours,
+        agendaTrips: trips
+          .map((t) => ({
+            id: t.id,
+            label: t.label.trim() || DEFAULT_GUACUI_LABEL,
+            address: t.address.trim() || DEFAULT_GUACUI_ADDRESS,
+            days: t.days
+              .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d.date) && d.slots.length > 0)
+              .map((d) => ({ date: d.date, slots: d.slots })),
+          }))
+          .filter((t) => t.days.length > 0),
         knowledgeItems: knowledgeItems
           .map((k) => ({
             nome: k.nome.trim(),
@@ -727,6 +846,102 @@ export function AgentSettingsSheet({
                         </>
                       )}
                     </div>
+                  </div>
+
+                  {/* Viagens (Guaçuí / slots por data) */}
+                  <div className="space-y-3 border-t border-border pt-3">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Viagens (ex.: Guaçuí)</Label>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Cadastre as datas e horários exatos do mês. Nesses dias a IA usa só esses
+                        slots; nos demais, a grade semanal do Rio.
+                      </p>
+                    </div>
+                    {trips.map((trip) => (
+                      <div
+                        key={trip.id}
+                        className="space-y-2 rounded-md border border-border p-3"
+                      >
+                        <div className="flex items-start gap-2">
+                          <div className="flex-1 space-y-2">
+                            <Input
+                              value={trip.label}
+                              onChange={(e) => patchTrip(trip.id, { label: e.target.value })}
+                              placeholder="Guaçuí"
+                            />
+                            <Input
+                              value={trip.address}
+                              onChange={(e) => patchTrip(trip.id, { address: e.target.value })}
+                              placeholder="Endereço completo"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0 text-muted-foreground hover:text-destructive"
+                            onClick={() => removeTrip(trip.id)}
+                            title="Remover viagem"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        {trip.days.map((day, dayIdx) => (
+                          <div key={dayIdx} className="space-y-1.5 rounded border border-dashed border-border p-2">
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="date"
+                                className="w-40"
+                                value={day.date}
+                                onChange={(e) => setTripDayDate(trip.id, dayIdx, e.target.value)}
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="shrink-0 text-muted-foreground hover:text-destructive"
+                                onClick={() => removeTripDay(trip.id, dayIdx)}
+                                title="Remover dia"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            <Textarea
+                              className="min-h-[88px] font-mono text-xs"
+                              placeholder={"9:00h\n10:00h\n11:30h\n14:00\n15:00"}
+                              value={tripSlotsText[`${trip.id}:${dayIdx}`] ?? day.slots.join("\n")}
+                              onChange={(e) =>
+                                setTripDaySlotsDraft(trip.id, dayIdx, e.target.value)
+                              }
+                            />
+                            <p className="text-[11px] text-muted-foreground">
+                              Um horário por linha (aceita 9:00 ou 9:00h).{" "}
+                              {day.slots.length
+                                ? `${day.slots.length} horário(s) reconhecido(s).`
+                                : "Nenhum horário ainda."}
+                            </p>
+                          </div>
+                        ))}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => addTripDay(trip.id)}
+                        >
+                          <Plus className="h-4 w-4" /> Adicionar dia
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={addTrip}
+                    >
+                      <Plus className="h-4 w-4" /> Adicionar viagem do mês
+                    </Button>
                   </div>
                 </div>
               )}

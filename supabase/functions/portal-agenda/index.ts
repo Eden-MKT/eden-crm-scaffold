@@ -5,8 +5,12 @@ import {
   BOARD_STATUSES,
   SLOT_BLOCKING_STATUSES,
   createAppointment,
+  parseAgendaTrips,
+  resolveLocationForDate,
+  utcToZonedParts,
   type AgentService,
 } from "../_shared/agenda.ts";
+import { notifyAppointmentById } from "../_shared/agenda-notify.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return preflight();
@@ -19,7 +23,7 @@ Deno.serve(async (req) => {
   // Agente do cliente (para agenda_enabled + serviços/duração).
   const { data: agent } = await db
     .from("whatsapp_agents")
-    .select("id, agenda_enabled, agenda_services")
+    .select("id, agenda_enabled, agenda_services, agenda_trips, agenda_timezone")
     .eq("client_id", clientId)
     .maybeSingle();
 
@@ -69,6 +73,10 @@ Deno.serve(async (req) => {
       const svc = services.find((s) => s.label === label);
       const durationMin = Number(body.durationMin) || svc?.durationMin || 60;
       const startsAt = new Date(body.startsAt);
+      const tz = String(agent?.agenda_timezone ?? "America/Sao_Paulo");
+      const trips = parseAgendaTrips(agent?.agenda_trips);
+      const dateISO = utcToZonedParts(startsAt, tz).dateISO;
+      const loc = resolveLocationForDate(trips, dateISO);
       const res = await createAppointment(db, {
         clientId,
         agentId: agent?.id ?? null,
@@ -78,6 +86,8 @@ Deno.serve(async (req) => {
         patientName: body.patientName?.trim() || null,
         patientPhone: body.patientPhone?.trim() || null,
         source: "client",
+        locationLabel: loc.label,
+        locationAddress: loc.address,
       });
       if (!res.ok) {
         return json(
@@ -85,6 +95,7 @@ Deno.serve(async (req) => {
           409,
         );
       }
+      if (res.id) void notifyAppointmentById(db, res.id);
       return json({ ok: true, id: res.id });
     }
 

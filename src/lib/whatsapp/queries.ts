@@ -12,6 +12,7 @@ import {
   type AgentExtraField,
   type AgentService,
   type AgendaHours,
+  type AgendaTrip,
   type FollowupConfig,
   type HandoffConfig,
   type KnowledgeItem,
@@ -40,7 +41,7 @@ export interface AgentWithClient {
 // ao navegador de qualquer usuário do painel. Quando houver UI de configuração
 // do Monday, busque a config por um caminho que não exponha o token.
 const AGENT_COLS =
-  "id, client_id, instance_name, status, phone_number, system_prompt, niche, business_info, conversion_goal, model, temperature, ai_enabled, greeting, responsible_name, responsible_phone, business_address, profession, registration_number, extra_fields, response_delay_seconds, is_medical, agenda_enabled, agenda_timezone, agenda_hours, agenda_services, prompt_injection_enabled, knowledge_items, objection_config, handoff_config, followup_config, created_at, updated_at";
+  "id, client_id, instance_name, status, phone_number, system_prompt, niche, business_info, conversion_goal, model, temperature, ai_enabled, greeting, responsible_name, responsible_phone, business_address, profession, registration_number, extra_fields, response_delay_seconds, is_medical, agenda_enabled, agenda_timezone, agenda_hours, agenda_services, agenda_trips, prompt_injection_enabled, knowledge_items, objection_config, handoff_config, followup_config, created_at, updated_at";
 
 // Lista todos os clientes com o agente (se existir) — a base dos cards.
 export async function fetchAgentsWithClients(): Promise<AgentWithClient[]> {
@@ -103,6 +104,7 @@ export interface UpdateAgentInput {
   agendaTimezone?: string;
   agendaHours?: AgendaHours;
   agendaServices?: AgentService[];
+  agendaTrips?: AgendaTrip[];
   promptInjectionEnabled?: boolean;
   knowledgeItems?: KnowledgeItem[];
   objectionConfig?: ObjectionConfigItem[];
@@ -136,6 +138,8 @@ export async function updateAgent(id: string, patch: UpdateAgentInput): Promise<
     row.agenda_hours = patch.agendaHours as unknown as AgentUpdate["agenda_hours"];
   if (patch.agendaServices !== undefined)
     row.agenda_services = patch.agendaServices as unknown as AgentUpdate["agenda_services"];
+  if (patch.agendaTrips !== undefined)
+    row.agenda_trips = patch.agendaTrips as unknown as AgentUpdate["agenda_trips"];
   if (patch.promptInjectionEnabled !== undefined)
     row.prompt_injection_enabled = patch.promptInjectionEnabled;
   if (patch.knowledgeItems !== undefined)

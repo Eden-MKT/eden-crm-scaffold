@@ -1,4 +1,8 @@
 import type { Database } from "@/integrations/supabase/types";
+import type { AgendaTrip } from "@/lib/agenda/trip-slots";
+import { parseAgendaTrips } from "@/lib/agenda/trip-slots";
+
+export type { AgendaTrip, AgendaTripDay } from "@/lib/agenda/trip-slots";
 
 // As colunas monday_* ficam de fora do que o front lê: monday_token é segredo
 // do cliente e só as Edge Functions (service role) devem enxergá-lo. Manter o
@@ -156,6 +160,7 @@ export interface WhatsappAgent {
   agendaTimezone: string;
   agendaHours: AgendaHours;
   agendaServices: AgentService[];
+  agendaTrips: AgendaTrip[];
   promptInjectionEnabled: boolean;
   knowledgeItems: KnowledgeItem[];
   objectionConfig: ObjectionConfigItem[];
@@ -310,6 +315,7 @@ export function mapAgent(row: AgentRow): WhatsappAgent {
     agendaTimezone: row.agenda_timezone ?? "America/Sao_Paulo",
     agendaHours: parseHours(row.agenda_hours),
     agendaServices: parseServices(row.agenda_services),
+    agendaTrips: parseAgendaTrips(row.agenda_trips),
     promptInjectionEnabled: row.prompt_injection_enabled ?? true,
     knowledgeItems: parseKnowledgeItems(row.knowledge_items),
     objectionConfig: parseObjectionConfig(row.objection_config),

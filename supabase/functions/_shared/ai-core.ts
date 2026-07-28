@@ -6,6 +6,8 @@ import {
   freeSlots,
   FUTURE_ACTIVE_STATUSES,
   MEDICAL_PROMPT,
+  parseAgendaTrips,
+  resolveLocationForDate,
   resolveService,
   utcToZonedParts,
   weekdayLabelPtBr,
@@ -228,6 +230,7 @@ export function buildSystemPrompt(
           (agent.agenda_services as AgentService[]) ?? [],
           agent.agenda_hours as AgendaHours,
           String(agent.agenda_timezone ?? "America/Sao_Paulo"),
+          parseAgendaTrips(agent.agenda_trips),
         )
       : "";
 
@@ -272,6 +275,7 @@ export async function handleVerificar(
   const tz = String(agent.agenda_timezone ?? "America/Sao_Paulo");
   const services = (agent.agenda_services as AgentService[]) ?? [];
   const hours = agent.agenda_hours as AgendaHours;
+  const trips = parseAgendaTrips(agent.agenda_trips);
   const service = resolveService(services, args.servico);
   if (!args.data) return { erro: "Informe a data no formato AAAA-MM-DD." };
   const slots = await freeSlots(db, {
@@ -280,7 +284,9 @@ export async function handleVerificar(
     durationMin: service.durationMin,
     hours,
     tz,
+    trips,
   });
+  const loc = resolveLocationForDate(trips, args.data);
 
   let ownTimes: string[] = [];
   if (conversationId) {
@@ -302,6 +308,9 @@ export async function handleVerificar(
     dia_semana: weekdayLabelPtBr(args.data, tz),
     servico: service.label,
     duracao_min: service.durationMin,
+    local: loc.label,
+    endereco: loc.address,
+    ...(loc.isTrip ? { viagem: true } : {}),
     horarios_livres: slots,
     ...(ownTimes.length
       ? {

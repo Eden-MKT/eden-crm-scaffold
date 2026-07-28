@@ -112,6 +112,8 @@ export interface Database {
           status: string;
           source: string;
           notes: string | null;
+          location_label: string | null;
+          location_address: string | null;
           confirmed: boolean;
           confirmation_sent_at: string | null;
           created_at: string;
@@ -130,6 +132,8 @@ export interface Database {
           status?: string;
           source?: string;
           notes?: string | null;
+          location_label?: string | null;
+          location_address?: string | null;
           confirmed?: boolean;
           confirmation_sent_at?: string | null;
           created_at?: string;
@@ -148,6 +152,8 @@ export interface Database {
           status?: string;
           source?: string;
           notes?: string | null;
+          location_label?: string | null;
+          location_address?: string | null;
           confirmed?: boolean;
           confirmation_sent_at?: string | null;
           created_at?: string;
@@ -366,9 +372,11 @@ export interface Database {
           response_delay_seconds: number;
           is_medical: boolean;
           agenda_enabled: boolean;
+          agenda_notify_group_jid: string | null;
           agenda_timezone: string;
           agenda_hours: Json;
           agenda_services: Json;
+          agenda_trips: Json;
           prompt_injection_enabled: boolean;
           knowledge_items: Json;
           handoff_config: Json;
@@ -404,9 +412,11 @@ export interface Database {
           response_delay_seconds?: number;
           is_medical?: boolean;
           agenda_enabled?: boolean;
+          agenda_notify_group_jid?: string | null;
           agenda_timezone?: string;
           agenda_hours?: Json;
           agenda_services?: Json;
+          agenda_trips?: Json;
           prompt_injection_enabled?: boolean;
           knowledge_items?: Json;
           handoff_config?: Json;
@@ -442,9 +452,11 @@ export interface Database {
           response_delay_seconds?: number;
           is_medical?: boolean;
           agenda_enabled?: boolean;
+          agenda_notify_group_jid?: string | null;
           agenda_timezone?: string;
           agenda_hours?: Json;
           agenda_services?: Json;
+          agenda_trips?: Json;
           prompt_injection_enabled?: boolean;
           knowledge_items?: Json;
           handoff_config?: Json;

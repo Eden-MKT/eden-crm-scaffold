@@ -15,6 +15,8 @@ import {
   createAppointment,
   freeSlots,
   FUTURE_ACTIVE_STATUSES,
+  parseAgendaTrips,
+  resolveLocationForDate,
   resolveService,
   utcToZonedParts,
   weekdayLabelPtBr,
@@ -33,6 +35,7 @@ import { registrarObjecao, registrarTentativaVideo, stripObjectionVideoUrls, too
 import { processDispatchInbound } from "../_shared/dispatch-optout.ts";
 import { resolveLeadPhone } from "../_shared/phone.ts";
 import { syncMonday } from "../_shared/monday.ts";
+import { notifyAppointmentById } from "../_shared/agenda-notify.ts";
 
 const DEBOUNCE_MS = 15000; // fallback quando o agente não tem response_delay_seconds
 const HISTORY = 40;
@@ -501,8 +504,10 @@ async function handleAgendar(
   const tz = String(agent.agenda_timezone ?? "America/Sao_Paulo");
   const services = (agent.agenda_services as AgentService[]) ?? [];
   const hours = agent.agenda_hours as AgendaHours;
+  const trips = parseAgendaTrips(agent.agenda_trips);
   const service = resolveService(services, args.servico);
   const startsAt = zonedToUtc(args.data, args.hora, tz);
+  const loc = resolveLocationForDate(trips, args.data);
 
   // Remarcação automática: se o contato já tem agendamento futuro nesta conversa,
   // o novo substitui o antigo (evita duplicata quando o cliente muda o horário).
@@ -526,6 +531,8 @@ async function handleAgendar(
     patientName: args.nome_paciente ?? null,
     patientPhone: leadPhone,
     source: "ai",
+    locationLabel: loc.label,
+    locationAddress: loc.address,
     ignoreAppointmentId: existing?.id ?? null,
   });
 
@@ -537,8 +544,9 @@ async function handleAgendar(
         durationMin: service.durationMin,
         hours,
         tz,
+        trips,
       });
-      return { ok: false, motivo: "Horário indisponível.", horarios_livres: slots };
+      return { ok: false, motivo: "Horário indisponível.", horarios_livres: slots, local: loc.label };
     }
     return { ok: false, motivo: "Não foi possível agendar agora." };
   }
@@ -551,6 +559,11 @@ async function handleAgendar(
     remarcadoDe = `${prev.dateISO} ${prev.time}`;
   }
 
+  if (res.id) {
+    // fire-and-forget: não bloqueia a confirmação ao lead se o grupo falhar
+    void notifyAppointmentById(db, res.id);
+  }
+
   const local = utcToZonedParts(startsAt, tz);
   return {
     ok: true,
@@ -560,6 +573,8 @@ async function handleAgendar(
       dia_semana: weekdayLabelPtBr(local.dateISO, tz),
       hora: local.time,
       servico: service.label,
+      local: loc.label,
+      endereco: loc.address,
     },
     ...(remarcadoDe
       ? {

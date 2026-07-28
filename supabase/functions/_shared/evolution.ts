@@ -281,6 +281,12 @@ export function fetchProfilePicture(instance: string, number: string) {
   return call("POST", `/chat/fetchProfilePictureUrl/${encodeURIComponent(instance)}`, { number });
 }
 
+/** Lista grupos da instância (subject + id JID @g.us). */
+export function fetchAllGroups(instance: string, getParticipants = false) {
+  const q = getParticipants ? "?getParticipants=true" : "?getParticipants=false";
+  return call("GET", `/group/fetchAllGroups/${encodeURIComponent(instance)}${q}`);
+}
+
 // Fallback quando webhook.base64 não entrega a mídia (mídias grandes).
 export function getBase64FromMedia(instance: string, key: unknown, message: unknown) {
   return call("POST", `/chat/getBase64FromMediaMessage/${encodeURIComponent(instance)}`, {

@@ -26,7 +26,82 @@ export interface AgendaHours {
   lunch: { enabled: boolean; start: string; end: string };
 }
 
+/** Dia de viagem com horários exatos (não usa a grade semanal). */
+export interface AgendaTripDay {
+  date: string; // YYYY-MM-DD
+  slots: string[]; // HH:MM
+}
+
+/** Viagem mensal (ex.: Guaçuí) com N dias e slots fixos. */
+export interface AgendaTrip {
+  id: string;
+  label: string;
+  address: string;
+  days: AgendaTripDay[];
+}
+
+export const DEFAULT_LEBLON_LABEL = "Leblon (RB Clinique)";
+export const DEFAULT_LEBLON_ADDRESS = "RB Clinique - Av Ataulfo de Paiva 135 - Sala 218";
+export const DEFAULT_GUACUI_LABEL = "Guaçuí";
+export const DEFAULT_GUACUI_ADDRESS =
+  "Instituto Unique — Rua Senador Atílio Vivacqua, 169 — Guaçuí, ES";
+
 const WEEKDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+
+/** Normaliza lista JSONB de viagens. */
+export function parseAgendaTrips(raw: unknown): AgendaTrip[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((t): t is Record<string, unknown> => !!t && typeof t === "object" && !Array.isArray(t))
+    .map((t) => ({
+          id: String(t.id ?? "").trim() || `trip-${Math.random().toString(36).slice(2, 10)}`,
+      label: String(t.label ?? DEFAULT_GUACUI_LABEL).trim() || DEFAULT_GUACUI_LABEL,
+      address: String(t.address ?? DEFAULT_GUACUI_ADDRESS).trim() || DEFAULT_GUACUI_ADDRESS,
+      days: (Array.isArray(t.days) ? t.days : [])
+        .filter((d): d is Record<string, unknown> => !!d && typeof d === "object")
+        .map((d) => ({
+          date: String(d.date ?? "").slice(0, 10),
+          slots: (Array.isArray(d.slots) ? d.slots : [])
+            .map((s) => normalizeSlotTime(String(s)))
+            .filter(Boolean) as string[],
+        }))
+        .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d.date)),
+    }))
+    .filter((t) => t.days.length > 0);
+}
+
+/** "9:00h" / "9:00" / "09:00" → "09:00" */
+export function normalizeSlotTime(raw: string): string | null {
+  const m = raw.trim().match(/^(\d{1,2}):(\d{2})\s*h?$/i);
+  if (!m) return null;
+  const hh = Number(m[1]);
+  const mm = Number(m[2]);
+  if (hh > 23 || mm > 59) return null;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
+/** Se a data cair em alguma viagem, devolve trip + day. */
+export function findTripDay(
+  trips: AgendaTrip[],
+  dateISO: string,
+): { trip: AgendaTrip; day: AgendaTripDay } | null {
+  for (const trip of trips) {
+    const day = trip.days.find((d) => d.date === dateISO);
+    if (day) return { trip, day };
+  }
+  return null;
+}
+
+export function resolveLocationForDate(
+  trips: AgendaTrip[],
+  dateISO: string,
+): { label: string; address: string; isTrip: boolean } {
+  const hit = findTripDay(trips, dateISO);
+  if (hit) {
+    return { label: hit.trip.label, address: hit.trip.address, isTrip: true };
+  }
+  return { label: DEFAULT_LEBLON_LABEL, address: DEFAULT_LEBLON_ADDRESS, isTrip: false };
+}
 
 // Offset (ms) do fuso em relação ao UTC no instante `date`.
 function tzOffsetMs(date: Date, tz: string): number {
@@ -183,9 +258,46 @@ async function scheduledInRange(
 // Horários livres (strings "HH:MM" no fuso do cliente) para um dia e duração.
 export async function freeSlots(
   db: DB,
-  opts: { clientId: string; dateISO: string; durationMin: number; hours: AgendaHours; tz: string },
+  opts: {
+    clientId: string;
+    dateISO: string;
+    durationMin: number;
+    hours: AgendaHours;
+    tz: string;
+    /** Se a data estiver numa viagem, usa slots exatos (ignora grade semanal). */
+    trips?: AgendaTrip[];
+  },
 ): Promise<string[]> {
-  const { clientId, dateISO, durationMin, hours, tz } = opts;
+  const { clientId, dateISO, durationMin, hours, tz, trips = [] } = opts;
+  const durMs = durationMin * 60_000;
+  const nowMs = Date.now();
+
+  const tripHit = findTripDay(trips, dateISO);
+  if (tripHit) {
+    const times = tripHit.day.slots
+      .map((s) => normalizeSlotTime(s))
+      .filter((s): s is string => !!s)
+      .sort();
+    if (!times.length) return [];
+    const winStart = zonedToUtc(dateISO, times[0], tz).getTime();
+    const lastStart = zonedToUtc(dateISO, times[times.length - 1], tz).getTime();
+    const winEnd = lastStart + durMs;
+    const busy = await scheduledInRange(db, clientId, new Date(winStart), new Date(winEnd));
+    const busyRanges = busy.map((b) => ({
+      s: new Date(b.starts_at).getTime(),
+      e: new Date(b.ends_at).getTime(),
+    }));
+    const free: string[] = [];
+    for (const hhmm of times) {
+      const s = zonedToUtc(dateISO, hhmm, tz).getTime();
+      const e = s + durMs;
+      if (s < nowMs) continue;
+      if (busyRanges.some((b) => overlaps(s, e, b.s, b.e))) continue;
+      free.push(hhmm);
+    }
+    return free;
+  }
+
   const key = weekdayKeyOf(dateISO, tz);
   const day = hours?.[key];
   if (!day || !day.open) return [];
@@ -206,8 +318,6 @@ export async function freeSlots(
   }));
 
   const stepMs = SLOT_STEP_MIN * 60_000;
-  const durMs = durationMin * 60_000;
-  const nowMs = Date.now();
   const slots: string[] = [];
   for (let s = winStart; s + durMs <= winEnd; s += stepMs) {
     const e = s + durMs;
@@ -244,6 +354,8 @@ export async function createAppointment(
     patientPhone?: string | null;
     source: "ai" | "staff" | "client";
     notes?: string | null;
+    locationLabel?: string | null;
+    locationAddress?: string | null;
     /** Ignora este agendamento no check de conflito (remarcação: o horário antigo é dele). */
     ignoreAppointmentId?: string | null;
   },
@@ -267,6 +379,8 @@ export async function createAppointment(
       status: "scheduled",
       source: a.source,
       notes: a.notes ?? null,
+      location_label: a.locationLabel ?? null,
+      location_address: a.locationAddress ?? null,
     })
     .select("id")
     .single();
@@ -296,6 +410,7 @@ export function buildAgendaPrompt(
   services: AgentService[],
   hours: AgendaHours,
   tz: string,
+  trips: AgendaTrip[] = [],
 ): string {
   const svc = (Array.isArray(services) ? services : [])
     .filter((s) => s && s.label)
@@ -321,6 +436,33 @@ export function buildAgendaPrompt(
     .join(" · ");
   const lunch = hours?.lunch?.enabled ? ` (almoço ${hours.lunch.start}–${hours.lunch.end})` : "";
 
+  const todayISO = utcToZonedParts(new Date(), tz).dateISO;
+  const tripLines: string[] = [];
+  for (const trip of trips) {
+    const futureDays = trip.days
+      .filter((d) => d.date >= todayISO)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    if (!futureDays.length) continue;
+    const daysTxt = futureDays
+      .map((d) => {
+        const [y, m, dd] = d.date.split("-");
+        return `${dd}/${m}/${y} (${weekdayLabelPtBr(d.date, tz)})`;
+      })
+      .join(", ");
+    tripLines.push(
+      `- ${trip.label}: ${daysTxt}. Endereço: ${trip.address}. Nesses dias NÃO use a grade do Rio — só os horários que verificar_disponibilidade retornar.`,
+    );
+  }
+  const tripsBlock = tripLines.length
+    ? `
+- Locais de atendimento:
+  - Base regular (${DEFAULT_LEBLON_LABEL}): grade semanal abaixo. Endereço: ${DEFAULT_LEBLON_ADDRESS}.
+  - Viagens / outro município (só nas datas cadastradas):
+${tripLines.map((l) => `  ${l}`).join("\n")}
+- Quando o paciente for agendar, pergunte se prefere Rio (Leblon) ou a cidade da viagem (se houver datas futuras). Nunca invente datas de viagem — use só as listadas acima e a ferramenta.`
+    : `
+- Local padrão: ${DEFAULT_LEBLON_LABEL} — ${DEFAULT_LEBLON_ADDRESS}.`;
+
   return `
 AGENDAMENTO (você pode agendar diretamente no sistema):
 - SEU OBJETIVO é qualificar o paciente, tirar todas as dúvidas e MARCAR A CONSULTA. Conduza a
@@ -331,10 +473,10 @@ AGENDAMENTO (você pode agendar diretamente no sistema):
   encerre com cordialidade e deixe a porta aberta.
 - Tipos de atendimento disponíveis:
 ${svc || "- Consulta (~60 min)"}
-- Horário de atendimento: ${hoursLines}${lunch}. Fuso: ${tz}.
+- Horário de atendimento (base Rio / Leblon): ${hoursLines}${lunch}. Fuso: ${tz}.${tripsBlock}
 - SEMPRE use a ferramenta verificar_disponibilidade (com a data no formato AAAA-MM-DD e o tipo
   de atendimento) ANTES de oferecer horários. Ofereça apenas horários que ela retornar — nunca
-  invente horário.
+  invente horário. Se a ferramenta devolver "local"/"endereco", use esses dados na confirmação.
 - Ao apresentar horários, escreva de forma NATURAL e inline, numa frase só, NUNCA em lista com
   marcadores — ex.: "Na sexta (17/07) eu tenho 8h, 10h ou 14h, qual fica melhor? 😊".
 - NUNCA calcule o dia da semana de cabeça. Use EXATAMENTE o campo "dia_semana" que a ferramenta
@@ -343,9 +485,10 @@ ${svc || "- Consulta (~60 min)"}
 - Se o dia pedido não tiver vaga, NÃO peça para o paciente ficar chutando datas. Você mesmo
   verifica os próximos dias úteis (chamando a ferramenta para os próximos dias) e já oferece a
   primeira data com horários livres. Diga a indisponibilidade UMA vez, de forma acolhedora, e
-  NUNCA repita a mesma negativa — sempre traga uma opção nova e concreta.
+  NUNCA repita a mesma negativa — sempre traga uma opção nova e concreta. Se o paciente quiser a
+  cidade da viagem, priorize as datas de viagem listadas.
 - Só use a ferramenta agendar depois de confirmar com o paciente a data, a hora, o tipo de
   atendimento e o nome. Se o horário estiver ocupado, ofereça as alternativas retornadas.
-- Ao concluir o agendamento, confirme em uma frase curta e calorosa (data, hora e tipo).
+- Ao concluir o agendamento, confirme em uma frase curta e calorosa (data, hora, tipo e cidade/local).
 `.trim();
 }

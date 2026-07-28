@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import type { AppointmentStatus, BoardAppointmentStatus } from "@/lib/agenda/appointment-status";
+import { parseAgendaTrips, resolveLocationForDate } from "@/lib/agenda/trip-slots";
 
 export type { AppointmentStatus, BoardAppointmentStatus } from "@/lib/agenda/appointment-status";
 
@@ -100,20 +101,57 @@ export interface StaffApptInput {
 export async function createStaffAppointment(input: StaffApptInput): Promise<void> {
   const starts = new Date(input.startsAt);
   const ends = new Date(starts.getTime() + input.durationMin * 60_000);
-  const { error } = await supabase.from("appointments").insert({
-    client_id: input.clientId,
-    agent_id: input.agentId,
-    patient_name: input.patientName || null,
-    patient_phone: input.patientPhone,
-    service_label: input.serviceLabel,
-    duration_min: input.durationMin,
-    starts_at: starts.toISOString(),
-    ends_at: ends.toISOString(),
-    status: "scheduled",
-    source: "staff",
-    notes: input.notes,
-  });
+
+  let locationLabel: string | null = null;
+  let locationAddress: string | null = null;
+  if (input.agentId) {
+    const { data: agent } = await supabase
+      .from("whatsapp_agents")
+      .select("agenda_trips, agenda_timezone")
+      .eq("id", input.agentId)
+      .maybeSingle();
+    if (agent) {
+      const tz = agent.agenda_timezone || "America/Sao_Paulo";
+      const trips = parseAgendaTrips(agent.agenda_trips);
+      // Data civil no fuso do agente (evita virada UTC).
+      const dateISO = new Intl.DateTimeFormat("en-CA", {
+        timeZone: tz,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(starts);
+      const loc = resolveLocationForDate(trips, dateISO);
+      locationLabel = loc.label;
+      locationAddress = loc.address;
+    }
+  }
+
+  const { data, error } = await supabase
+    .from("appointments")
+    .insert({
+      client_id: input.clientId,
+      agent_id: input.agentId,
+      patient_name: input.patientName || null,
+      patient_phone: input.patientPhone,
+      service_label: input.serviceLabel,
+      duration_min: input.durationMin,
+      starts_at: starts.toISOString(),
+      ends_at: ends.toISOString(),
+      status: "scheduled",
+      source: "staff",
+      notes: input.notes,
+      location_label: locationLabel,
+      location_address: locationAddress,
+    })
+    .select("id")
+    .single();
   if (error) throw error;
+  // Aviso no grupo WhatsApp (se o agente tiver agenda_notify_group_jid).
+  if (data?.id) {
+    void supabase.functions.invoke("agenda-notify", {
+      body: { appointmentId: data.id },
+    });
+  }
 }
 
 export interface StaffApptUpdate {
