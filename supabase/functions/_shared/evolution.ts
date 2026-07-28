@@ -13,13 +13,17 @@ const BASE = () => requiredEnv("EVOLUTION_API_URL").replace(/\/$/, "");
 const KEY = () => requiredEnv("EVOLUTION_API_KEY");
 
 async function call(method: string, path: string, body?: unknown): Promise<unknown> {
+  // charset=utf-8 explícito: evita emoji/acentos quebrarem em proxies que assumem Latin-1.
+  const headers: Record<string, string> = { apikey: KEY() };
+  let payload: Uint8Array | undefined;
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json; charset=utf-8";
+    payload = new TextEncoder().encode(JSON.stringify(body));
+  }
   const res = await fetch(`${BASE()}${path}`, {
     method,
-    headers: {
-      apikey: KEY(),
-      "Content-Type": "application/json",
-    },
-    body: body ? JSON.stringify(body) : undefined,
+    headers,
+    body: payload,
   });
   const text = await res.text();
   let data: unknown = null;
