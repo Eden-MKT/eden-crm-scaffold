@@ -112,6 +112,16 @@ export function stripObjectionVideoUrls(text: string, extraUrl?: string | null):
 }
 
 /**
+ * Índice da bolha que anuncia o vídeo (para enviar o arquivo DEPOIS dela).
+ * Se nenhuma casar, 0 — o prompt pede acolher+anunciar na mesma bolha.
+ */
+export function indexOfVideoAnnounceBubble(bubbles: string[]): number {
+  const re = /v[ií]deo|te mandar|vou te (enviar|mandar)|te envio|assist/i;
+  const idx = bubbles.findIndex((b) => re.test(b));
+  return idx >= 0 ? idx : 0;
+}
+
+/**
  * Registra o resultado da tentativa de envio do vídeo (fase de saída).
  *
  * É chamada tanto no sucesso quanto na falha: `video_tentado` tranca o tipo em

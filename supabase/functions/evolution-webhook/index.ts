@@ -31,7 +31,7 @@ import {
   handoffPhones,
   type PatientRecord,
 } from "../_shared/capabilities.ts";
-import { registrarObjecao, registrarTentativaVideo, stripObjectionVideoUrls, toolResultForModel } from "../_shared/objection.ts";
+import { registrarObjecao, registrarTentativaVideo, stripObjectionVideoUrls, toolResultForModel, indexOfVideoAnnounceBubble } from "../_shared/objection.ts";
 import { processDispatchInbound } from "../_shared/dispatch-optout.ts";
 import { resolveLeadPhone } from "../_shared/phone.ts";
 import { syncMonday } from "../_shared/monday.ts";
@@ -973,6 +973,8 @@ async function runPipeline(
     const bubbles = splitBubbles(finalText)
       .map((b) => stripObjectionVideoUrls(b, objecaoVideo?.url))
       .filter(Boolean);
+    // Vídeo só depois da bolha que anuncia (evita: acolhimento → vídeo → "vou te mandar…").
+    const videoAfterIdx = objecaoVideo ? indexOfVideoAnnounceBubble(bubbles) : -1;
     for (let i = 0; i < bubbles.length; i++) {
       const bubble = bubbles[i];
       // Abort-no-meio: se o cliente mandou algo novo enquanto a IA envia as
@@ -1008,8 +1010,9 @@ async function runPipeline(
         .update({ last_message_at: now, last_message_preview: bubble.slice(0, 120) })
         .eq("id", conversationId);
 
-      // Vídeo de objeção: enviar após a 1ª bolha (acolhimento), antes do fechamento.
-      if (objecaoVideo && i === 0) {
+      // Vídeo de objeção: só após a bolha de anúncio (texto → vídeo → complemento).
+      if (objecaoVideo && i === videoAfterIdx) {
+        await new Promise((r) => setTimeout(r, 800));
         let enviado = false;
         let erroVideo: string | undefined;
         try {
@@ -1017,7 +1020,7 @@ async function runPipeline(
             mediatype: "video",
             media: objecaoVideo.url,
             fileName: `objecao_${objecaoVideo.tipo}.mp4`,
-            delay: 1200,
+            delay: 400,
           })) as { key?: { id?: string } };
           await db.from("whatsapp_messages").insert({
             conversation_id: conversationId,
