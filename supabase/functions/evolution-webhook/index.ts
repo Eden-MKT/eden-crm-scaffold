@@ -31,7 +31,13 @@ import {
   handoffPhones,
   type PatientRecord,
 } from "../_shared/capabilities.ts";
-import { registrarObjecao, registrarTentativaVideo, stripObjectionVideoUrls, toolResultForModel, indexOfVideoAnnounceBubble } from "../_shared/objection.ts";
+import {
+  registrarObjecao,
+  registrarTentativaVideo,
+  stripObjectionVideoUrls,
+  toolResultForModel,
+  indexOfVideoAnnounceBubble,
+} from "../_shared/objection.ts";
 import { processDispatchInbound } from "../_shared/dispatch-optout.ts";
 import { resolveLeadPhone } from "../_shared/phone.ts";
 import { syncMonday } from "../_shared/monday.ts";
@@ -546,7 +552,12 @@ async function handleAgendar(
         tz,
         trips,
       });
-      return { ok: false, motivo: "Horário indisponível.", horarios_livres: slots, local: loc.label };
+      return {
+        ok: false,
+        motivo: "Horário indisponível.",
+        horarios_livres: slots,
+        local: loc.label,
+      };
     }
     return { ok: false, motivo: "Não foi possível agendar agora." };
   }
@@ -1018,6 +1029,7 @@ async function runPipeline(
         try {
           const vr = (await evo.sendMedia(String(agent.instance_name), remoteJid, {
             mediatype: "video",
+            mimetype: "video/mp4",
             media: objecaoVideo.url,
             fileName: `objecao_${objecaoVideo.tipo}.mp4`,
             delay: 400,

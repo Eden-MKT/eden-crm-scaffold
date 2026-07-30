@@ -15,6 +15,20 @@ export function PortalMessageBubble({ message }: { message: PortalMessage }) {
   const outgoing = message.direction === "out";
   const url = message.mediaUrl;
 
+  // Mídia enviada (ex.: vídeo de objeção) guarda a URL pública em `content` e não
+  // tem mediaUrl — sem isso o cliente veria a URL crua como texto.
+  const contentUrl =
+    !url && typeof message.content === "string" && /^https?:\/\/\S+$/.test(message.content.trim())
+      ? message.content.trim()
+      : null;
+  const outgoingMedia =
+    contentUrl &&
+    (message.messageType === "video" ||
+      message.messageType === "image" ||
+      message.messageType === "audio")
+      ? contentUrl
+      : null;
+
   return (
     <div className={cn("flex", outgoing ? "justify-end" : "justify-start")}>
       <div
@@ -63,7 +77,27 @@ export function PortalMessageBubble({ message }: { message: PortalMessage }) {
           </div>
         )}
 
-        {message.content && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
+        {outgoingMedia ? (
+          <div className="mb-1">
+            {message.messageType === "video" && (
+              <video controls src={outgoingMedia} className="max-h-64 rounded-lg" />
+            )}
+            {message.messageType === "image" && (
+              <a href={outgoingMedia} target="_blank" rel="noreferrer">
+                <img
+                  src={outgoingMedia}
+                  alt="imagem"
+                  className="max-h-64 rounded-lg object-cover"
+                />
+              </a>
+            )}
+            {message.messageType === "audio" && (
+              <audio controls src={outgoingMedia} className="w-56" />
+            )}
+          </div>
+        ) : (
+          message.content && <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        )}
         <span
           className={cn(
             "mt-0.5 block text-right text-[10px]",

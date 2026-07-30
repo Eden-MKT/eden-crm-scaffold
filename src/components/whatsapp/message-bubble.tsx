@@ -28,6 +28,21 @@ export function MessageBubble({ message }: { message: WhatsappMessage }) {
     };
   }, [message.mediaPath]);
 
+  // Mídia ENVIADA (ex.: vídeo de objeção) guarda a URL pública em `content` e não
+  // tem mediaPath. Sem tratar isso, o painel mostrava a URL crua como texto — o
+  // que parecia "a IA mandou um link". Renderiza o player direto da URL.
+  const contentUrl =
+    !message.mediaPath &&
+    typeof message.content === "string" &&
+    /^https?:\/\/\S+$/.test(message.content.trim())
+      ? message.content.trim()
+      : null;
+  const isMediaType =
+    message.messageType === "video" ||
+    message.messageType === "image" ||
+    message.messageType === "audio";
+  const outgoingMedia = contentUrl && isMediaType ? contentUrl : null;
+
   return (
     <div className={cn("flex", outgoing ? "justify-end" : "justify-start")}>
       <div
@@ -78,7 +93,27 @@ export function MessageBubble({ message }: { message: WhatsappMessage }) {
           </div>
         )}
 
-        {message.content && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
+        {outgoingMedia ? (
+          <div className="mb-1">
+            {message.messageType === "video" && (
+              <video controls src={outgoingMedia} className="max-h-64 rounded-lg" />
+            )}
+            {message.messageType === "image" && (
+              <a href={outgoingMedia} target="_blank" rel="noreferrer">
+                <img
+                  src={outgoingMedia}
+                  alt="imagem"
+                  className="max-h-64 rounded-lg object-cover"
+                />
+              </a>
+            )}
+            {message.messageType === "audio" && (
+              <audio controls src={outgoingMedia} className="w-56" />
+            )}
+          </div>
+        ) : (
+          message.content && <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        )}
         <span
           className={cn(
             "mt-0.5 block text-right text-[10px]",

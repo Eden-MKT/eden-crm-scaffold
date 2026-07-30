@@ -269,12 +269,20 @@ export function sendText(
 export function sendMedia(
   instance: string,
   number: string,
-  opts: { mediatype: string; media: string; caption?: string; fileName?: string; delay?: number },
+  opts: {
+    mediatype: string;
+    media: string;
+    mimetype?: string;
+    caption?: string;
+    fileName?: string;
+    delay?: number;
+  },
 ) {
   return call("POST", `/message/sendMedia/${encodeURIComponent(instance)}`, {
     number,
     mediatype: opts.mediatype,
     media: opts.media,
+    ...(opts.mimetype ? { mimetype: opts.mimetype } : {}),
     ...(opts.caption ? { caption: opts.caption } : {}),
     ...(opts.fileName ? { fileName: opts.fileName } : {}),
     ...(opts.delay ? { delay: opts.delay } : {}),
