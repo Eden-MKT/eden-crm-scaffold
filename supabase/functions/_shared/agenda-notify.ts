@@ -64,8 +64,7 @@ export async function notifyAppointmentById(db: DB, appointmentId: string): Prom
   // Só usa responsible_name se já vier como "Dr/Dra …".
   const responsible = agent.responsible_name?.trim() || "";
   const specialist = /^dr\.?a?\s/i.test(responsible) ? responsible : DEFAULT_SPECIALIST;
-  const address =
-    (appt.location_address as string | null)?.trim() || DEFAULT_ADDRESS;
+  const address = (appt.location_address as string | null)?.trim() || DEFAULT_ADDRESS;
 
   const text = formatAgendaNotifyMessage({
     patientName: name,
@@ -74,6 +73,18 @@ export async function notifyAppointmentById(db: DB, appointmentId: string): Prom
     timezone: tz,
     address,
   });
+
+  // Claim atômico: só o primeiro chamador de UMA linha envia. Se a IA reprocessar
+  // o mesmo agendamento (loop de tools) ou dois fluxos correrem, o UPDATE só afeta
+  // 1x — evita o aviso duplicado no grupo. Remarcação de verdade cria linha nova
+  // (group_notified_at null) → avisa corretamente.
+  const { data: claimed } = await db
+    .from("appointments")
+    .update({ group_notified_at: new Date().toISOString() })
+    .eq("id", appointmentId)
+    .is("group_notified_at", null)
+    .select("id");
+  if (!claimed || claimed.length === 0) return; // já avisado
 
   try {
     await sendText(instance, groupJid, text, 800);

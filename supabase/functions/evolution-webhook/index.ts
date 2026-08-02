@@ -514,6 +514,16 @@ async function handleAgendar(
   const service = resolveService(services, args.servico);
   const startsAt = zonedToUtc(args.data, args.hora, tz);
   const loc = resolveLocationForDate(trips, args.data);
+  const localParts = utcToZonedParts(startsAt, tz);
+  const confirmado = {
+    data: localParts.dateISO,
+    // Vai pronto para a IA não errar o dia ao confirmar com o paciente.
+    dia_semana: weekdayLabelPtBr(localParts.dateISO, tz),
+    hora: localParts.time,
+    servico: service.label,
+    local: loc.label,
+    endereco: loc.address,
+  };
 
   // Remarcação automática: se o contato já tem agendamento futuro nesta conversa,
   // o novo substitui o antigo (evita duplicata quando o cliente muda o horário).
@@ -526,6 +536,20 @@ async function handleAgendar(
     .order("starts_at", { ascending: true })
     .limit(1)
     .maybeSingle();
+
+  // MESMO horário já agendado = re-confirmação (a IA às vezes emite a tool
+  // "agendar" 2x no mesmo turno). No-op: não cria duplicata, não cancela, não
+  // avisa o grupo de novo. Só o horário DIFERENTE segue para remarcação. Foi
+  // esta a causa do aviso duplicado no grupo.
+  if (existing?.id && new Date(existing.starts_at).getTime() === startsAt.getTime()) {
+    return {
+      ok: true,
+      ja_agendado: true,
+      confirmado,
+      observacao:
+        "A consulta JÁ estava agendada para este mesmo horário. NÃO reenvie confirmação; apenas tranquilize o paciente com uma frase curta.",
+    };
+  }
 
   const res = await createAppointment(db, {
     clientId: String(agent.client_id),
@@ -571,29 +595,45 @@ async function handleAgendar(
   }
 
   if (res.id) {
-    // fire-and-forget: não bloqueia a confirmação ao lead se o grupo falhar
+    // Aviso no grupo (idempotente por group_notified_at). Fire-and-forget.
     void notifyAppointmentById(db, res.id);
+
+    // Confirmação IMEDIATA ao paciente (idempotente por booking_confirmed_at:
+    // só envia 1x mesmo se o agendamento for reprocessado).
+    const { data: claimedConf } = await db
+      .from("appointments")
+      .update({ booking_confirmed_at: new Date().toISOString() })
+      .eq("id", res.id)
+      .is("booking_confirmed_at", null)
+      .select("id");
+    if (claimedConf && claimedConf.length > 0) {
+      const [yy, mm, dd] = localParts.dateISO.split("-");
+      void yy;
+      const conf = [
+        remarcadoDe ? "✅ Consulta *remarcada* com sucesso!" : "✅ Sua consulta está confirmada!",
+        `📅 ${confirmado.dia_semana}, ${dd}/${mm} às ${confirmado.hora}`,
+        `🩺 ${confirmado.servico}`,
+        `📍 ${confirmado.local}${confirmado.endereco ? ` — ${confirmado.endereco}` : ""}`,
+        "",
+        "Se precisar remarcar ou cancelar, é só me avisar por aqui. 💙",
+      ].join("\n");
+      try {
+        await evo.sendText(String(agent.instance_name), remoteJid, conf, 600);
+      } catch (e) {
+        console.error("confirmacao imediata:", e instanceof Error ? e.message : e);
+      }
+    }
   }
 
-  const local = utcToZonedParts(startsAt, tz);
   return {
     ok: true,
-    confirmado: {
-      data: local.dateISO,
-      // Vai pronto para a IA não errar o dia ao confirmar com o paciente.
-      dia_semana: weekdayLabelPtBr(local.dateISO, tz),
-      hora: local.time,
-      servico: service.label,
-      local: loc.label,
-      endereco: loc.address,
-    },
-    ...(remarcadoDe
-      ? {
-          remarcado: true,
-          horario_anterior: remarcadoDe,
-          observacao: "O agendamento anterior foi cancelado; informe ao cliente que foi remarcado.",
-        }
-      : {}),
+    confirmado,
+    // O sistema JÁ mandou a confirmação estruturada ao paciente — evita o modelo
+    // repetir data/hora (o que soaria como mensagem duplicada).
+    confirmacao_enviada: true,
+    observacao:
+      "Já enviei ao paciente a confirmação com data, horário e local. NÃO repita esses dados; responda apenas com uma finalização curta e calorosa (1 frase).",
+    ...(remarcadoDe ? { remarcado: true, horario_anterior: remarcadoDe } : {}),
   };
 }
 
