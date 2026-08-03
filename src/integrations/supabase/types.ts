@@ -116,6 +116,7 @@ export interface Database {
           location_address: string | null;
           confirmed: boolean;
           confirmation_sent_at: string | null;
+          group_notified_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -136,6 +137,7 @@ export interface Database {
           location_address?: string | null;
           confirmed?: boolean;
           confirmation_sent_at?: string | null;
+          group_notified_at?: string | null;
           created_at?: string;
         };
         Update: {
@@ -156,6 +158,7 @@ export interface Database {
           location_address?: string | null;
           confirmed?: boolean;
           confirmation_sent_at?: string | null;
+          group_notified_at?: string | null;
           created_at?: string;
         };
         Relationships: [

@@ -289,7 +289,7 @@ async function runConfirmations(db: DB) {
   const { data: appts } = await db
     .from("appointments")
     .select(
-      "id, agent_id, conversation_id, patient_name, service_label, starts_at, confirmed, confirmation_sent_at",
+      "id, agent_id, conversation_id, patient_name, service_label, starts_at, created_at, confirmed, confirmation_sent_at",
     )
     .eq("status", "scheduled")
     .eq("confirmed", false)
@@ -320,6 +320,11 @@ async function runConfirmations(db: DB) {
       const tomorrow = utcToZonedParts(new Date(Date.now() + 24 * 60 * 60 * 1000), tz);
       if (apptLocal.dateISO !== tomorrow.dateISO) continue;
       if (Number(nowLocal.time.slice(0, 2)) < 9) continue;
+
+      // Não mandar "está confirmado?" no mesmo dia em que a pessoa acabou de agendar
+      // (ex.: agendou segunda 12h para terça → só lembraria na própria segunda).
+      const createdLocal = utcToZonedParts(new Date(ap.created_at), tz);
+      if (createdLocal.dateISO === nowLocal.dateISO) continue;
 
       // Claim: marca antes de enviar (crons sobrepostos não duplicam).
       const { data: claimed } = await db

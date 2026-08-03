@@ -78,13 +78,18 @@ export async function notifyAppointmentById(db: DB, appointmentId: string): Prom
   // o mesmo agendamento (loop de tools) ou dois fluxos correrem, o UPDATE só afeta
   // 1x — evita o aviso duplicado no grupo. Remarcação de verdade cria linha nova
   // (group_notified_at null) → avisa corretamente.
-  const { data: claimed } = await db
+  const { data: claimed, error: claimErr } = await db
     .from("appointments")
     .update({ group_notified_at: new Date().toISOString() })
     .eq("id", appointmentId)
     .is("group_notified_at", null)
-    .select("id");
-  if (!claimed || claimed.length === 0) return; // já avisado
+    .select("id")
+    .maybeSingle();
+  if (claimErr) {
+    console.error("agenda-notify claim:", claimErr.message);
+    return;
+  }
+  if (!claimed) return; // já avisado
 
   try {
     await sendText(instance, groupJid, text, 800);

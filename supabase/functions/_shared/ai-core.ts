@@ -84,7 +84,7 @@ export const AGENDA_MARCAR_TOOL = {
   function: {
     name: "agendar",
     description:
-      "Cria o agendamento após confirmar data, hora, tipo e nome com o paciente. Só chame depois de verificar_disponibilidade e da confirmação do paciente.",
+      "Cria o agendamento após o paciente já ter ouvido o valor (se houver na lista de serviços), e após confirmar data, hora, tipo e nome. Só chame depois de verificar_disponibilidade. Não chame se ainda não informou o valor cadastrado nesta conversa.",
     parameters: {
       type: "object",
       properties: {
