@@ -84,16 +84,30 @@ export const AGENDA_MARCAR_TOOL = {
   function: {
     name: "agendar",
     description:
-      "Cria o agendamento após o paciente já ter ouvido o valor (se houver na lista de serviços), e após confirmar data, hora, tipo e nome. Só chame depois de verificar_disponibilidade. Não chame se ainda não informou o valor cadastrado nesta conversa.",
+      "Cria o agendamento. Só chame DEPOIS de: (1) ter INFORMADO o valor da consulta ao paciente nesta conversa; (2) ter perguntado e recebido o NOME COMPLETO do próprio paciente; (3) confirmar data e hora com verificar_disponibilidade. NUNCA agende sem o valor informado e sem o nome dito pelo paciente (não use o nome salvo do contato).",
     parameters: {
       type: "object",
       properties: {
         data: { type: "string", description: "Data no formato AAAA-MM-DD" },
         hora: { type: "string", description: "Hora no formato HH:MM (24h)" },
         servico: { type: "string", description: "Tipo de atendimento" },
-        nome_paciente: { type: "string", description: "Nome do paciente" },
+        nome_paciente: {
+          type: "string",
+          description:
+            "Nome COMPLETO informado pelo próprio paciente (nunca o nome salvo do contato).",
+        },
+        valor_informado: {
+          type: "boolean",
+          description:
+            "true SOMENTE se você já informou o valor da consulta ao paciente nesta conversa. Se ainda não informou, informe primeiro e não agende.",
+        },
+        nascimento: {
+          type: "string",
+          description: "Data de nascimento do paciente, se informada.",
+        },
+        cpf: { type: "string", description: "CPF do paciente, se informado." },
       },
-      required: ["data", "hora"],
+      required: ["data", "hora", "nome_paciente", "valor_informado"],
     },
   },
 };

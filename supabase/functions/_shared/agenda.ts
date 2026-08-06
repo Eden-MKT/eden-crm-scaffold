@@ -54,7 +54,7 @@ export function parseAgendaTrips(raw: unknown): AgendaTrip[] {
   return raw
     .filter((t): t is Record<string, unknown> => !!t && typeof t === "object" && !Array.isArray(t))
     .map((t) => ({
-          id: String(t.id ?? "").trim() || `trip-${Math.random().toString(36).slice(2, 10)}`,
+      id: String(t.id ?? "").trim() || `trip-${Math.random().toString(36).slice(2, 10)}`,
       label: String(t.label ?? DEFAULT_GUACUI_LABEL).trim() || DEFAULT_GUACUI_LABEL,
       address: String(t.address ?? DEFAULT_GUACUI_ADDRESS).trim() || DEFAULT_GUACUI_ADDRESS,
       days: (Array.isArray(t.days) ? t.days : [])
@@ -218,12 +218,7 @@ export const SLOT_BLOCKING_STATUSES = [
 ] as const;
 
 /** Status de consulta futura ativa (não dispara follow-up de venda). */
-export const FUTURE_ACTIVE_STATUSES = [
-  "scheduled",
-  "confirmed",
-  "waiting",
-  "late",
-] as const;
+export const FUTURE_ACTIVE_STATUSES = ["scheduled", "confirmed", "waiting", "late"] as const;
 
 /** Status operacionais do board (sem cancelled). */
 export const BOARD_STATUSES = [
@@ -487,14 +482,18 @@ ${svc || "- Consulta (~60 min)"}
   primeira data com horários livres. Diga a indisponibilidade UMA vez, de forma acolhedora, e
   NUNCA repita a mesma negativa — sempre traga uma opção nova e concreta. Se o paciente quiser a
   cidade da viagem, priorize as datas de viagem listadas.
-- Só use a ferramenta agendar depois de: (1) se houver valor na lista de SERVIÇOS E VALORES,
-  ter INFORMADO esse valor ao paciente nesta conversa (não invente número); (2) confirmar com
-  o paciente a data, a hora, o tipo de atendimento e o nome. Se o horário estiver ocupado,
-  ofereça as alternativas retornadas.
-- Ao concluir o agendamento (tool agendar ok): envie UMA ÚNICA mensagem curta e calorosa
-  confirmando data, hora e local — sem segunda bolha, sem repetir. NÃO pergunte "está
-  confirmado?" nessa hora (o sistema manda lembrete na véspera). NÃO cole no chat 1:1 o
-  bloco "CONSULTA AGENDADA / Nome / Especialista / Data / Endereço" — isso vai só para o
-  grupo pelo sistema; no WhatsApp do paciente fale naturalmente.
+- NUNCA chame a ferramenta agendar antes de DUAS coisas: (1) ter INFORMADO o valor da consulta
+  ao paciente nesta conversa (use o valor da lista de SERVIÇOS E VALORES / das suas instruções;
+  não invente número) — ao chamar agendar, só passe valor_informado=true se realmente informou;
+  (2) ter PERGUNTADO e recebido o NOME COMPLETO do próprio paciente (nunca use o nome salvo do
+  contato). A ferramenta vai RECUSAR o agendamento se faltar o valor ou o nome — nesse caso,
+  peça o que faltou e só então agende. Confirme data, hora e tipo antes. Se o horário estiver
+  ocupado, ofereça as alternativas retornadas.
+- Ao concluir o agendamento (tool agendar ok): envie ao paciente APENAS UMA mensagem de
+  confirmação (data, hora e local). É PROIBIDO repetir a confirmação, enviar uma 2ª mensagem
+  confirmando de novo, ou perguntar "está confirmado?" — mande a confirmação uma vez e pare.
+  (O lembrete fica por conta do sistema.) NÃO cole no chat 1:1 o bloco interno de aviso do
+  GRUPO ("CONSULTA AGENDADA / Nome / Especialista / Data / Endereço") — esse vai só para o
+  grupo pelo sistema.
 `.trim();
 }

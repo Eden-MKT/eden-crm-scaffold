@@ -499,7 +499,15 @@ async function handleAgendar(
   /** Telefone real do lead; null quando não foi possível resolver (@lid). */
   leadPhone: string | null,
 ) {
-  let args: { data?: string; hora?: string; servico?: string; nome_paciente?: string } = {};
+  let args: {
+    data?: string;
+    hora?: string;
+    servico?: string;
+    nome_paciente?: string;
+    valor_informado?: boolean;
+    nascimento?: string;
+    cpf?: string;
+  } = {};
   try {
     args = JSON.parse(argsJson || "{}");
   } catch {
@@ -507,6 +515,41 @@ async function handleAgendar(
   }
   if (!args.data || !args.hora)
     return { ok: false, erro: "Informe data (AAAA-MM-DD) e hora (HH:MM)." };
+
+  // TRAVA: não agendar sem ter informado o valor e sem o nome real do paciente.
+  // (Regras de texto no prompt eram furadas; aqui é enforcement de verdade.)
+  if (args.valor_informado !== true) {
+    return {
+      ok: false,
+      faltou: "valor",
+      motivo:
+        "Você ainda NÃO informou o valor da consulta ao paciente. Informe o valor primeiro e só então agende.",
+    };
+  }
+  const nome = String(args.nome_paciente ?? "").trim();
+  if (!nome) {
+    return {
+      ok: false,
+      faltou: "nome",
+      motivo: "Pergunte o NOME COMPLETO do paciente antes de agendar.",
+    };
+  }
+  // O bug do print: a IA usou o nome salvo do contato como paciente.
+  const { data: convRow } = await db
+    .from("whatsapp_conversations")
+    .select("contact_name")
+    .eq("id", conversationId)
+    .maybeSingle();
+  const contactName = String(convRow?.contact_name ?? "").trim();
+  if (contactName && nome.toLowerCase() === contactName.toLowerCase()) {
+    return {
+      ok: false,
+      faltou: "nome",
+      motivo:
+        "Confirme o NOME COMPLETO diretamente COM o paciente — não use o nome salvo do contato. Pergunte o nome antes de agendar.",
+    };
+  }
+
   const tz = String(agent.agenda_timezone ?? "America/Sao_Paulo");
   const services = (agent.agenda_services as AgentService[]) ?? [];
   const hours = agent.agenda_hours as AgendaHours;
@@ -558,7 +601,7 @@ async function handleAgendar(
     startsAt,
     durationMin: service.durationMin,
     serviceLabel: service.label,
-    patientName: args.nome_paciente ?? null,
+    patientName: nome,
     patientPhone: leadPhone,
     source: "ai",
     locationLabel: loc.label,
@@ -596,43 +639,18 @@ async function handleAgendar(
 
   if (res.id) {
     // Aviso no grupo (idempotente por group_notified_at). Fire-and-forget.
+    // Quem confirma para o PACIENTE é o próprio modelo (uma vez) — sem mensagem
+    // do sistema, para não duplicar a confirmação.
     void notifyAppointmentById(db, res.id);
-
-    // Confirmação IMEDIATA ao paciente (idempotente por booking_confirmed_at:
-    // só envia 1x mesmo se o agendamento for reprocessado).
-    const { data: claimedConf } = await db
-      .from("appointments")
-      .update({ booking_confirmed_at: new Date().toISOString() })
-      .eq("id", res.id)
-      .is("booking_confirmed_at", null)
-      .select("id");
-    if (claimedConf && claimedConf.length > 0) {
-      const [yy, mm, dd] = localParts.dateISO.split("-");
-      void yy;
-      const conf = [
-        remarcadoDe ? "✅ Consulta *remarcada* com sucesso!" : "✅ Sua consulta está confirmada!",
-        `📅 ${confirmado.dia_semana}, ${dd}/${mm} às ${confirmado.hora}`,
-        `🩺 ${confirmado.servico}`,
-        `📍 ${confirmado.local}${confirmado.endereco ? ` — ${confirmado.endereco}` : ""}`,
-        "",
-        "Se precisar remarcar ou cancelar, é só me avisar por aqui. 💙",
-      ].join("\n");
-      try {
-        await evo.sendText(String(agent.instance_name), remoteJid, conf, 600);
-      } catch (e) {
-        console.error("confirmacao imediata:", e instanceof Error ? e.message : e);
-      }
-    }
   }
 
   return {
     ok: true,
     confirmado,
-    // O sistema JÁ mandou a confirmação estruturada ao paciente — evita o modelo
-    // repetir data/hora (o que soaria como mensagem duplicada).
-    confirmacao_enviada: true,
+    // A IA confirma ao paciente — UMA única vez. A observação evita a 2ª/3ª
+    // mensagem de confirmação que estava acontecendo.
     observacao:
-      "Já enviei ao paciente a confirmação com data, horário e local. NÃO repita esses dados; responda apenas com uma finalização curta e calorosa (1 frase).",
+      "Agendado com sucesso. Envie ao paciente a confirmação UMA única vez, com data, hora e local. NÃO repita a confirmação, NÃO pergunte 'está confirmado?' e não envie mais nenhuma mensagem de confirmação depois desta.",
     ...(remarcadoDe ? { remarcado: true, horario_anterior: remarcadoDe } : {}),
   };
 }
