@@ -376,6 +376,7 @@ export interface Database {
           is_medical: boolean;
           agenda_enabled: boolean;
           agenda_notify_group_jid: string | null;
+          group_consult_topics: Json;
           agenda_timezone: string;
           agenda_hours: Json;
           agenda_services: Json;
@@ -416,6 +417,7 @@ export interface Database {
           is_medical?: boolean;
           agenda_enabled?: boolean;
           agenda_notify_group_jid?: string | null;
+          group_consult_topics?: Json;
           agenda_timezone?: string;
           agenda_hours?: Json;
           agenda_services?: Json;
@@ -456,6 +458,7 @@ export interface Database {
           is_medical?: boolean;
           agenda_enabled?: boolean;
           agenda_notify_group_jid?: string | null;
+          group_consult_topics?: Json;
           agenda_timezone?: string;
           agenda_hours?: Json;
           agenda_services?: Json;

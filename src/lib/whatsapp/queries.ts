@@ -41,7 +41,7 @@ export interface AgentWithClient {
 // ao navegador de qualquer usuário do painel. Quando houver UI de configuração
 // do Monday, busque a config por um caminho que não exponha o token.
 const AGENT_COLS =
-  "id, client_id, instance_name, status, phone_number, system_prompt, niche, business_info, conversion_goal, model, temperature, ai_enabled, greeting, responsible_name, responsible_phone, business_address, profession, registration_number, extra_fields, response_delay_seconds, is_medical, agenda_enabled, agenda_timezone, agenda_hours, agenda_services, agenda_trips, prompt_injection_enabled, knowledge_items, objection_config, handoff_config, followup_config, created_at, updated_at";
+  "id, client_id, instance_name, status, phone_number, system_prompt, niche, business_info, conversion_goal, model, temperature, ai_enabled, greeting, responsible_name, responsible_phone, business_address, profession, registration_number, extra_fields, response_delay_seconds, is_medical, agenda_enabled, agenda_notify_group_jid, group_consult_topics, agenda_timezone, agenda_hours, agenda_services, agenda_trips, prompt_injection_enabled, knowledge_items, objection_config, handoff_config, followup_config, created_at, updated_at";
 
 // Lista todos os clientes com o agente (se existir) — a base dos cards.
 export async function fetchAgentsWithClients(): Promise<AgentWithClient[]> {
@@ -101,6 +101,8 @@ export interface UpdateAgentInput {
   responseDelaySeconds?: number;
   isMedical?: boolean;
   agendaEnabled?: boolean;
+  agendaNotifyGroupJid?: string;
+  groupConsultTopics?: string[];
   agendaTimezone?: string;
   agendaHours?: AgendaHours;
   agendaServices?: AgentService[];
@@ -133,6 +135,11 @@ export async function updateAgent(id: string, patch: UpdateAgentInput): Promise<
     row.response_delay_seconds = patch.responseDelaySeconds;
   if (patch.isMedical !== undefined) row.is_medical = patch.isMedical;
   if (patch.agendaEnabled !== undefined) row.agenda_enabled = patch.agendaEnabled;
+  if (patch.agendaNotifyGroupJid !== undefined)
+    row.agenda_notify_group_jid = patch.agendaNotifyGroupJid.trim() || null;
+  if (patch.groupConsultTopics !== undefined)
+    row.group_consult_topics =
+      patch.groupConsultTopics as unknown as AgentUpdate["group_consult_topics"];
   if (patch.agendaTimezone !== undefined) row.agenda_timezone = patch.agendaTimezone;
   if (patch.agendaHours !== undefined)
     row.agenda_hours = patch.agendaHours as unknown as AgentUpdate["agenda_hours"];

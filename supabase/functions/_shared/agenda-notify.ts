@@ -8,6 +8,20 @@ type DB = any;
 const DEFAULT_ADDRESS = "RB Clinique - Av Ataulfo de Paiva 135 - Sala 218";
 const DEFAULT_SPECIALIST = "Dr Rafael Carvalho";
 
+/**
+ * Envia um texto ao grupo da equipe e devolve o id da mensagem (para correlação
+ * de respostas citadas). Retorna null se o envio não trouxer o id.
+ */
+export async function sendToGroup(
+  instance: string,
+  groupJid: string,
+  text: string,
+): Promise<string | null> {
+  const r = await sendText(instance, groupJid, text, 800);
+  // deno-lint-ignore no-explicit-any
+  return (r as any)?.key?.id ?? null;
+}
+
 export function formatAgendaNotifyMessage(opts: {
   patientName: string;
   specialistName: string;

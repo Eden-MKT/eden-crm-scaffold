@@ -112,6 +112,35 @@ export const AGENDA_MARCAR_TOOL = {
   },
 };
 
+// Tool consultar_equipe — só incluída quando o agente tem grupo configurado
+// (agenda_notify_group_jid). Independe de agenda_enabled: serve para levar
+// dúvidas fora do conhecimento da IA ao grupo humano (human-in-the-loop).
+export const AGENDA_CONSULTAR_EQUIPE_TOOL = {
+  type: "function",
+  function: {
+    name: "consultar_equipe",
+    description:
+      "Envia uma pergunta ao grupo da equipe quando você NÃO sabe responder com segurança OU quando o assunto é um dos temas que devem ser confirmados com a equipe. NUNCA invente a resposta — use esta ferramenta e avise o paciente que vai confirmar.",
+    parameters: {
+      type: "object",
+      properties: {
+        pergunta: {
+          type: "string",
+          description: "A pergunta objetiva a enviar à equipe",
+        },
+      },
+      required: ["pergunta"],
+    },
+  },
+};
+
+function hasGroupJid(agent: Agent): boolean {
+  return (
+    typeof agent.agenda_notify_group_jid === "string" &&
+    (agent.agenda_notify_group_jid as string).trim().length > 0
+  );
+}
+
 // Conjunto de tools conforme a config do agente.
 export function toolsForAgent(agent: Agent) {
   return [
@@ -122,7 +151,21 @@ export function toolsForAgent(agent: Agent) {
     ...(agent.agenda_enabled === true
       ? [AGENDA_VERIFICAR_TOOL, AGENDA_MARCAR_TOOL, ...AGENDA_EXTRA_TOOLS]
       : []),
+    ...(hasGroupJid(agent) ? [AGENDA_CONSULTAR_EQUIPE_TOOL] : []),
   ];
+}
+
+// Bloco de "consulta à equipe": lista os temas que a IA sempre confirma no grupo
+// e a regra de nunca inventar resposta fora do que sabe.
+export function buildGroupConsultBlock(agent: Agent): string {
+  if (!hasGroupJid(agent)) return "";
+  const raw = agent.group_consult_topics;
+  const topics = Array.isArray(raw)
+    ? raw.map((t) => (typeof t === "string" ? t.trim() : "")).filter(Boolean)
+    : [];
+  const temas = topics.length ? topics.join(", ") : "qualquer dúvida fora das suas informações";
+  return `
+CONSULTA À EQUIPE: para os temas a seguir, OU sempre que você não tiver certeza da resposta, use a ferramenta consultar_equipe em vez de responder — NUNCA invente. Temas: ${temas}. Após consultar, diga ao paciente que vai confirmar com a equipe e retorna em seguida.`.trim();
 }
 
 // Bloco de dados estruturados do cliente (campos fixos + extra_fields).
@@ -260,6 +303,7 @@ export function buildSystemPrompt(
     buildObjectionBlock(agent),
     buildClientDataBlock(agent),
     agendaBlock,
+    buildGroupConsultBlock(agent),
     buildContactAppointmentsBlock(contactAppointments ?? [], tz),
     patientBlock ?? "",
     agent.conversion_goal ? `Objetivo do atendimento (conversão): ${agent.conversion_goal}` : "",

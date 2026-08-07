@@ -41,7 +41,7 @@ import {
 import { processDispatchInbound } from "../_shared/dispatch-optout.ts";
 import { resolveLeadPhone } from "../_shared/phone.ts";
 import { syncMonday } from "../_shared/monday.ts";
-import { notifyAppointmentById } from "../_shared/agenda-notify.ts";
+import { notifyAppointmentById, sendToGroup } from "../_shared/agenda-notify.ts";
 
 const DEBOUNCE_MS = 15000; // fallback quando o agente não tem response_delay_seconds
 const HISTORY = 40;
@@ -273,6 +273,14 @@ async function handleMessage(db: DB, instance: string, data: Record<string, unkn
   const fromMe = Boolean(key.fromMe);
   const evolutionId = key.id ? String(key.id) : null;
   const leadPhone = resolveLeadPhone(data, remoteJid);
+
+  // Grupo da equipe (human-in-the-loop): resposta a uma consulta_equipe. O grupo
+  // NUNCA roda o pipeline de lead — só correlaciona/repassa. Vem ANTES do filtro
+  // 1:1 (que descarta @g.us) para não perder essas respostas.
+  if (remoteJid.endsWith("@g.us")) {
+    if (!fromMe) await handleGroupInbound(db, instance, remoteJid, data);
+    return;
+  }
 
   // Filtra grupos, status, newsletter — só conversas 1:1.
   if (!remoteJid.endsWith("@s.whatsapp.net") && !remoteJid.endsWith("@lid")) return;
@@ -655,6 +663,287 @@ async function handleAgendar(
   };
 }
 
+// Tool consultar_equipe: leva a pergunta ao grupo humano (human-in-the-loop) e
+// registra a consulta como 'waiting' para correlacionar a resposta depois.
+async function handleConsultarEquipe(
+  db: DB,
+  agent: Record<string, unknown>,
+  conversationId: string,
+  remoteJid: string,
+  argsJson: string,
+  contactName: string | null,
+) {
+  let args: { pergunta?: string } = {};
+  try {
+    args = JSON.parse(argsJson || "{}");
+  } catch {
+    /* ignora */
+  }
+  const pergunta = String(args.pergunta ?? "").trim();
+  if (!pergunta) return { ok: false, erro: "Pergunta vazia." };
+
+  const groupJid = String(agent.agenda_notify_group_jid ?? "").trim();
+  if (!groupJid) return { ok: false, erro: "Grupo não configurado." };
+
+  const quem = (contactName ?? "").trim() || remoteJid.split("@")[0];
+  const texto =
+    `❓ *Pergunta de ${quem}*:\n${pergunta}\n\n` +
+    `_Para eu repassar a resposta ao paciente, *Responder* (citar) esta mensagem._`;
+
+  const gmid = await sendToGroup(String(agent.instance_name), groupJid, texto);
+
+  await db.from("group_consults").insert({
+    agent_id: String(agent.id),
+    conversation_id: conversationId,
+    remote_jid: remoteJid,
+    pergunta,
+    group_message_id: gmid,
+    status: "waiting",
+  });
+
+  return {
+    ok: true,
+    enviado_a_equipe: true,
+    observacao:
+      "Enviei a pergunta à equipe. Diga ao paciente, de forma natural e calorosa, que você vai confirmar isso com a equipe do Dr. Rafael e retorna em seguida. NÃO invente a resposta.",
+  };
+}
+
+// Inbound do grupo da equipe: correlaciona a resposta (citada ou a consulta
+// 'waiting' mais recente) e repassa ao paciente com naturalidade. Não roda o
+// pipeline de lead nem faz claim_ai_run — é um repasse pontual por evento.
+async function handleGroupInbound(
+  db: DB,
+  instance: string,
+  groupJid: string,
+  data: Record<string, unknown>,
+) {
+  const { data: agent } = await db
+    .from("whatsapp_agents")
+    .select("*")
+    .eq("instance_name", instance)
+    .maybeSingle();
+  if (!agent) return;
+  if (String(agent.agenda_notify_group_jid ?? "").trim() !== groupJid) return;
+
+  // deno-lint-ignore no-explicit-any
+  const msg: any = data.message ?? {};
+  const texto =
+    typeof msg.conversation === "string"
+      ? msg.conversation
+      : typeof msg.extendedTextMessage?.text === "string"
+        ? msg.extendedTextMessage.text
+        : "";
+  if (!texto.trim()) return; // mídia/sem texto: ignora
+
+  const quotedId: string | null = msg.extendedTextMessage?.contextInfo?.stanzaId
+    ? String(msg.extendedTextMessage.contextInfo.stanzaId)
+    : null;
+
+  // Correlação: pela mensagem citada; senão, a consulta 'waiting' mais recente.
+  let consult: {
+    id: string;
+    conversation_id: string | null;
+    pergunta: string;
+  } | null = null;
+  if (quotedId) {
+    const { data: c } = await db
+      .from("group_consults")
+      .select("id, conversation_id, pergunta")
+      .eq("agent_id", agent.id)
+      .eq("group_message_id", quotedId)
+      .eq("status", "waiting")
+      .maybeSingle();
+    consult = c ?? null;
+  }
+  if (!consult && !quotedId) {
+    const { data: c } = await db
+      .from("group_consults")
+      .select("id, conversation_id, pergunta")
+      .eq("agent_id", agent.id)
+      .eq("status", "waiting")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    consult = c ?? null;
+  }
+  if (!consult) return; // mensagem de grupo não relacionada a uma consulta
+
+  await db
+    .from("group_consults")
+    .update({
+      status: "answered",
+      resposta_equipe: texto,
+      answered_at: new Date().toISOString(),
+    })
+    .eq("id", consult.id);
+
+  if (!consult.conversation_id) return;
+
+  const { data: conv } = await db
+    .from("whatsapp_conversations")
+    .select("contact_name, remote_jid, lead_temperature, conversion_probability")
+    .eq("id", consult.conversation_id)
+    .maybeSingle();
+  if (!conv) return;
+  const patientRemoteJid = String(conv.remote_jid ?? "");
+  if (!patientRemoteJid) return;
+
+  const { data: history } = await db
+    .from("whatsapp_messages")
+    .select("sender, content")
+    .eq("conversation_id", consult.conversation_id)
+    .order("sent_at", { ascending: false })
+    .limit(20);
+  const ordered = (history ?? []).reverse();
+
+  const model = String(agent.model ?? "gpt-4o");
+  const messages: ChatMessage[] = [
+    {
+      role: "system",
+      content: buildSystemPrompt(
+        agent,
+        { name: conv.contact_name ?? null, phone: patientRemoteJid.split("@")[0] },
+        [],
+        undefined,
+        conv,
+      ),
+    },
+    ...ordered.map((m: { sender: string; content: string | null }) => ({
+      role: (m.sender === "contact" ? "user" : "assistant") as "user" | "assistant",
+      content: m.content ?? "",
+    })),
+    {
+      role: "system",
+      content: `NOTA DO SISTEMA: A equipe respondeu à pergunta do paciente ("${consult.pergunta}"): "${texto}". Repasse essa resposta ao paciente de forma natural, calorosa e clara, como se você tivesse acabado de confirmar com a equipe. NÃO diga que consultou um "grupo"; diga que confirmou com a equipe/Dr. Rafael.`,
+    },
+  ];
+
+  const r = await chat({ model, messages, temperature: 0.5 });
+  await logUsage(
+    db,
+    String(agent.id),
+    String(consult.conversation_id),
+    "chat",
+    model,
+    r.promptTokens,
+    r.completionTokens,
+    chatCostUsd(model, r.promptTokens, r.completionTokens),
+  );
+
+  let finalText = r.content ?? "";
+  if (finalText.includes(NO_REPLY)) finalText = finalText.split(NO_REPLY).join("").trim();
+  if (!finalText.trim()) return;
+
+  await sendAiReply(db, instance, patientRemoteJid, String(consult.conversation_id), finalText);
+}
+
+// Envia a resposta da IA em bolhas (splitBubbles → sendText + registro em
+// whatsapp_messages + atualização da conversa). Extraído do runPipeline para ser
+// reusado pelo repasse de consulta ao grupo. Opções preservam o comportamento
+// original: citação, abort-no-meio e vídeo de objeção.
+async function sendAiReply(
+  db: DB,
+  instance: string,
+  remoteJid: string,
+  conversationId: string,
+  finalText: string,
+  opts: {
+    triggerMessageId?: string | null;
+    quoted?: unknown;
+    objecaoVideo?: { url: string; tipo: string } | null;
+    // deno-lint-ignore no-explicit-any
+    objsHandled?: Record<string, any>;
+  } = {},
+) {
+  const { triggerMessageId = null, quoted = null, objsHandled } = opts;
+  let objecaoVideo = opts.objecaoVideo ?? null;
+
+  const bubbles = splitBubbles(finalText)
+    .map((b) => stripObjectionVideoUrls(b, objecaoVideo?.url))
+    .filter(Boolean);
+  // Vídeo só depois da bolha que anuncia (evita: acolhimento → vídeo → "vou te mandar…").
+  const videoAfterIdx = objecaoVideo ? indexOfVideoAnnounceBubble(bubbles) : -1;
+  for (let i = 0; i < bubbles.length; i++) {
+    const bubble = bubbles[i];
+    // Abort-no-meio: se o cliente mandou algo novo enquanto a IA envia as
+    // bolhas, para tudo — a invocação da mensagem nova responde com contexto
+    // completo (evita terminar uma resposta já desatualizada).
+    if (triggerMessageId) {
+      const { data: still } = await db
+        .from("whatsapp_conversations")
+        .select("last_inbound_message_id")
+        .eq("id", conversationId)
+        .single();
+      if (still?.last_inbound_message_id !== triggerMessageId) break;
+    }
+
+    const withQuote = quoted && Math.random() < REPLY_QUOTE_PROBABILITY;
+    const r = (await evo.sendText(
+      instance,
+      remoteJid,
+      bubble,
+      typingDelay(bubble),
+      withQuote ? quoted : undefined,
+    )) as { key?: { id?: string } };
+    const now = new Date().toISOString();
+    await db.from("whatsapp_messages").insert({
+      conversation_id: conversationId,
+      direction: "out",
+      sender: "ai",
+      message_type: "text",
+      content: bubble,
+      evolution_id: r.key?.id ?? null,
+      sent_at: now,
+    });
+    await db
+      .from("whatsapp_conversations")
+      .update({ last_message_at: now, last_message_preview: bubble.slice(0, 120) })
+      .eq("id", conversationId);
+
+    // Vídeo de objeção: só após a bolha de anúncio (texto → vídeo → complemento).
+    if (objecaoVideo && objsHandled && i === videoAfterIdx) {
+      await new Promise((r) => setTimeout(r, 800));
+      let enviado = false;
+      let erroVideo: string | undefined;
+      try {
+        const vr = (await evo.sendMedia(instance, remoteJid, {
+          mediatype: "video",
+          mimetype: "video/mp4",
+          media: objecaoVideo.url,
+          fileName: `objecao_${objecaoVideo.tipo}.mp4`,
+          delay: 400,
+        })) as { key?: { id?: string } };
+        await db.from("whatsapp_messages").insert({
+          conversation_id: conversationId,
+          direction: "out",
+          sender: "ai",
+          message_type: "video",
+          content: objecaoVideo.url,
+          evolution_id: vr.key?.id ?? null,
+          sent_at: new Date().toISOString(),
+        });
+        enviado = true;
+      } catch (e) {
+        erroVideo = String(e);
+        // Falha aqui é silenciosa para o lead — por isso precisa gritar no log
+        // com a URL, que costuma ser a causa (arquivo removido do host).
+        console.error(
+          `sendMedia objecao FALHOU tipo=${objecaoVideo.tipo} url=${objecaoVideo.url} conv=${conversationId}`,
+          e,
+        );
+      }
+      // Registra a tentativa nos dois casos: sem isso, uma falha deixaria a
+      // trava desarmada e a IA reagiria à mesma objeção indefinidamente.
+      await registrarTentativaVideo(db, conversationId, objsHandled, objecaoVideo.tipo, {
+        enviado,
+        erro: erroVideo,
+      });
+      objecaoVideo = null; // envia só 1x nesta rodada
+    }
+  }
+}
+
 async function runPipeline(
   db: DB,
   agent: Record<string, unknown>,
@@ -941,7 +1230,7 @@ async function runPipeline(
           } else if (tc.name === "confirmar_presenca" && agendaOn) {
             const { data: next } = await db
               .from("appointments")
-              .select("id, starts_at")
+              .select("id, starts_at, patient_name")
               .eq("conversation_id", conversationId)
               .in("status", [...FUTURE_ACTIVE_STATUSES])
               .gte("ends_at", new Date().toISOString())
@@ -955,6 +1244,27 @@ async function runPipeline(
                 .from("appointments")
                 .update({ confirmed: true, status: "confirmed" })
                 .eq("id", next.id);
+              // Avisa o grupo da equipe que o paciente confirmou (best-effort).
+              const groupJid = String(agent.agenda_notify_group_jid ?? "").trim();
+              if (groupJid) {
+                try {
+                  const tz = String(agent.agenda_timezone ?? "America/Sao_Paulo");
+                  const parts = utcToZonedParts(new Date(next.starts_at), tz);
+                  const [y, m, d] = parts.dateISO.split("-");
+                  const dataPt = `${d}/${m}/${y} (${weekdayLabelPtBr(parts.dateISO, tz)})`;
+                  const nomePaciente =
+                    String(next.patient_name ?? "").trim() ||
+                    contact.name?.trim() ||
+                    remoteJid.split("@")[0];
+                  await sendToGroup(
+                    String(agent.instance_name),
+                    groupJid,
+                    `✅ *${nomePaciente}* confirmou presença — consulta ${dataPt} às ${parts.time}.`,
+                  );
+                } catch (e) {
+                  console.error("confirmar_presenca group notify error", e);
+                }
+              }
               result = { ok: true, confirmado: true };
             }
           } else if (tc.name === "cancelar_consulta" && agendaOn) {
@@ -978,6 +1288,15 @@ async function runPipeline(
                   "Confirme o cancelamento com empatia e ofereça remarcar quando fizer sentido.",
               };
             }
+          } else if (tc.name === "consultar_equipe") {
+            result = await handleConsultarEquipe(
+              db,
+              agent,
+              conversationId,
+              remoteJid,
+              tc.arguments,
+              contact.name,
+            );
           } else if (tc.name === "detectar_objecao") {
             try {
               const { tipo } = JSON.parse(tc.arguments || "{}");
@@ -1039,87 +1358,12 @@ async function runPipeline(
         }
       : null;
 
-    const bubbles = splitBubbles(finalText)
-      .map((b) => stripObjectionVideoUrls(b, objecaoVideo?.url))
-      .filter(Boolean);
-    // Vídeo só depois da bolha que anuncia (evita: acolhimento → vídeo → "vou te mandar…").
-    const videoAfterIdx = objecaoVideo ? indexOfVideoAnnounceBubble(bubbles) : -1;
-    for (let i = 0; i < bubbles.length; i++) {
-      const bubble = bubbles[i];
-      // Abort-no-meio: se o cliente mandou algo novo enquanto a IA envia as
-      // bolhas, para tudo — a invocação da mensagem nova responde com contexto
-      // completo (evita terminar uma resposta já desatualizada).
-      const { data: still } = await db
-        .from("whatsapp_conversations")
-        .select("last_inbound_message_id")
-        .eq("id", conversationId)
-        .single();
-      if (still?.last_inbound_message_id !== triggerMessageId) break;
-
-      const withQuote = quoted && Math.random() < REPLY_QUOTE_PROBABILITY;
-      const r = (await evo.sendText(
-        String(agent.instance_name),
-        remoteJid,
-        bubble,
-        typingDelay(bubble),
-        withQuote ? quoted : undefined,
-      )) as { key?: { id?: string } };
-      const now = new Date().toISOString();
-      await db.from("whatsapp_messages").insert({
-        conversation_id: conversationId,
-        direction: "out",
-        sender: "ai",
-        message_type: "text",
-        content: bubble,
-        evolution_id: r.key?.id ?? null,
-        sent_at: now,
-      });
-      await db
-        .from("whatsapp_conversations")
-        .update({ last_message_at: now, last_message_preview: bubble.slice(0, 120) })
-        .eq("id", conversationId);
-
-      // Vídeo de objeção: só após a bolha de anúncio (texto → vídeo → complemento).
-      if (objecaoVideo && i === videoAfterIdx) {
-        await new Promise((r) => setTimeout(r, 800));
-        let enviado = false;
-        let erroVideo: string | undefined;
-        try {
-          const vr = (await evo.sendMedia(String(agent.instance_name), remoteJid, {
-            mediatype: "video",
-            mimetype: "video/mp4",
-            media: objecaoVideo.url,
-            fileName: `objecao_${objecaoVideo.tipo}.mp4`,
-            delay: 400,
-          })) as { key?: { id?: string } };
-          await db.from("whatsapp_messages").insert({
-            conversation_id: conversationId,
-            direction: "out",
-            sender: "ai",
-            message_type: "video",
-            content: objecaoVideo.url,
-            evolution_id: vr.key?.id ?? null,
-            sent_at: new Date().toISOString(),
-          });
-          enviado = true;
-        } catch (e) {
-          erroVideo = String(e);
-          // Falha aqui é silenciosa para o lead — por isso precisa gritar no log
-          // com a URL, que costuma ser a causa (arquivo removido do host).
-          console.error(
-            `sendMedia objecao FALHOU tipo=${objecaoVideo.tipo} url=${objecaoVideo.url} conv=${conversationId}`,
-            e,
-          );
-        }
-        // Registra a tentativa nos dois casos: sem isso, uma falha deixaria a
-        // trava desarmada e a IA reagiria à mesma objeção indefinidamente.
-        await registrarTentativaVideo(db, conversationId, objsHandled, objecaoVideo.tipo, {
-          enviado,
-          erro: erroVideo,
-        });
-        objecaoVideo = null; // envia só 1x nesta rodada
-      }
-    }
+    await sendAiReply(db, String(agent.instance_name), remoteJid, conversationId, finalText, {
+      triggerMessageId,
+      quoted,
+      objecaoVideo,
+      objsHandled,
+    });
 
     // ShortMemory: atualiza o resumo da conversa (barato, todo agente) —
     // alimenta análise, follow-ups e o painel Markei.

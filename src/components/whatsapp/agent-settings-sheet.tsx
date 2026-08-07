@@ -131,6 +131,8 @@ export function AgentSettingsSheet({
     agent.objectionConfig,
   );
   const [handoffPhone, setHandoffPhone] = useState(agent.handoffConfig.telefones[0] ?? "");
+  const [groupJid, setGroupJid] = useState(agent.agendaNotifyGroupJid);
+  const [consultTopics, setConsultTopics] = useState<string[]>(agent.groupConsultTopics);
   const [followupEnabled, setFollowupEnabled] = useState(agent.followupConfig.enabled);
   const [confirmEnabled, setConfirmEnabled] = useState(agent.followupConfig.confirmEnabled);
   const [followupStages, setFollowupStages] = useState<FollowupStageUi[]>(
@@ -174,6 +176,8 @@ export function AgentSettingsSheet({
     setKnowledgeItems(agent.knowledgeItems);
     setObjectionConfig(agent.objectionConfig);
     setHandoffPhone(agent.handoffConfig.telefones[0] ?? "");
+    setGroupJid(agent.agendaNotifyGroupJid);
+    setConsultTopics(agent.groupConsultTopics);
     setFollowupEnabled(agent.followupConfig.enabled);
     setConfirmEnabled(agent.followupConfig.confirmEnabled);
     setFollowupStages(agent.followupConfig.estagios.map(toStageUi));
@@ -383,6 +387,8 @@ export function AgentSettingsSheet({
         handoffConfig: {
           telefones: handoffPhone.trim() ? [handoffPhone.trim()] : [],
         },
+        agendaNotifyGroupJid: groupJid.trim(),
+        groupConsultTopics: consultTopics.map((t) => t.trim()).filter(Boolean),
         followupConfig: {
           enabled: followupEnabled,
           confirmEnabled,
@@ -858,10 +864,7 @@ export function AgentSettingsSheet({
                       </p>
                     </div>
                     {trips.map((trip) => (
-                      <div
-                        key={trip.id}
-                        className="space-y-2 rounded-md border border-border p-3"
-                      >
+                      <div key={trip.id} className="space-y-2 rounded-md border border-border p-3">
                         <div className="flex items-start gap-2">
                           <div className="flex-1 space-y-2">
                             <Input
@@ -887,7 +890,10 @@ export function AgentSettingsSheet({
                           </Button>
                         </div>
                         {trip.days.map((day, dayIdx) => (
-                          <div key={dayIdx} className="space-y-1.5 rounded border border-dashed border-border p-2">
+                          <div
+                            key={dayIdx}
+                            className="space-y-1.5 rounded border border-dashed border-border p-2"
+                          >
                             <div className="flex items-center gap-2">
                               <Input
                                 type="date"
@@ -959,6 +965,36 @@ export function AgentSettingsSheet({
                 <Switch checked={confirmEnabled} onCheckedChange={setConfirmEnabled} />
               </div>
             )}
+
+            {/* Grupo da equipe — avisos de agendamento e consulta humana (HITL). */}
+            <div className="space-y-3 rounded-lg border border-border p-3">
+              <div>
+                <p className="text-sm font-medium">Grupo da equipe (WhatsApp)</p>
+                <p className="text-xs text-muted-foreground">
+                  JID do grupo onde a IA avisa agendamentos e faz perguntas à equipe. Ex.:
+                  120363xxxxxxxxxxxx@g.us
+                </p>
+              </div>
+              <Field label="JID do grupo (@g.us)">
+                <Input
+                  value={groupJid}
+                  onChange={(e) => setGroupJid(e.target.value)}
+                  placeholder="120363xxxxxxxxxxxx@g.us"
+                />
+              </Field>
+              <Field label="Perguntas/temas que a IA confirma no grupo">
+                <GatilhosInput
+                  value={consultTopics}
+                  onCommit={setConsultTopics}
+                  placeholder="Ex.: convênios, formas de pagamento, estacionamento"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Separe por vírgula. Nesses temas (ou em qualquer dúvida fora do que sabe), a IA
+                  pergunta à equipe no grupo em vez de inventar a resposta. Precisa do JID do grupo
+                  acima.
+                </p>
+              </Field>
+            </div>
           </TabsContent>
 
           {/* ---------------- Follow-ups ---------------- */}
