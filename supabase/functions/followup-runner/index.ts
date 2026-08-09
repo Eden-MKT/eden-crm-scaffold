@@ -364,7 +364,16 @@ async function runConfirmations(db: DB) {
         r.content?.trim() ||
         `Oi${nome ? `, ${nome}` : ""}! Passando para confirmar seu horário de amanhã às ${apptLocal.time}. Está confirmado? 😊`;
 
-      await sendBubbles(db, String(agent.instance_name), conv.remote_jid, conv.id, msg);
+      // Envio: se falhar (instância caindo, etc.), REVERTE o claim para reenviar
+      // na próxima rodada — sem isso, o confirmation_sent_at ficava marcado e a
+      // confirmação era "queimada" sem nunca chegar ao paciente.
+      try {
+        await sendBubbles(db, String(agent.instance_name), conv.remote_jid, conv.id, msg);
+      } catch (e) {
+        console.error("confirmation send failed, will retry:", ap.id, e);
+        await db.from("appointments").update({ confirmation_sent_at: null }).eq("id", ap.id);
+        continue;
+      }
       try {
         await db.from("whatsapp_usage").insert({
           agent_id: agent.id,

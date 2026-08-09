@@ -263,7 +263,9 @@ async function extractMessage(
   if (msg.stickerMessage)
     return { type: "sticker", content: "[figurinha]", mediaBytes: null, mime: null };
 
-  return { type: "other", content: "[mensagem não suportada]", mediaBytes: null, mime: null };
+  // Tipo não reconhecido (figurinha, enquete, etc.) → sinaliza para ignorar
+  // (o chamador não persiste nem responde).
+  return { type: "ignore", content: "", mediaBytes: null, mime: null };
 }
 
 async function handleMessage(db: DB, instance: string, data: Record<string, unknown>) {
@@ -319,9 +321,20 @@ async function handleMessage(db: DB, instance: string, data: Record<string, unkn
     return;
   }
 
+  // Reações (👍), edições/exclusões e votos de enquete NÃO são mensagens do
+  // usuário — nunca persistir nem acionar a IA (senão a IA "responde" a um
+  // emoji de reação como se fosse mensagem). Nem cria conversa.
+  // deno-lint-ignore no-explicit-any
+  const rawMsg: any = data.message ?? {};
+  if (rawMsg.reactionMessage || rawMsg.protocolMessage || rawMsg.pollUpdateMessage) return;
+
   const conv = await getOrCreateConversation(db, instance, agent.id, remoteJid, data);
 
   const extracted = await extractMessage(db, instance, agent.id, conv.id, data);
+  // Tipo desconhecido/sem conteúdo (figurinha, enquete, ruído de cripto, etc.):
+  // ignora em silêncio em vez de virar "[mensagem não suportada]" e provocar
+  // a IA a responder "não ficou claro".
+  if (extracted.type === "ignore") return;
 
   // Salva mídia no storage (quando houver).
   let mediaPath: string | null = null;
