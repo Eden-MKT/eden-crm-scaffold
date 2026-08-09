@@ -84,13 +84,18 @@ export const AGENDA_MARCAR_TOOL = {
   function: {
     name: "agendar",
     description:
-      "Cria o agendamento. Só chame DEPOIS de: (1) ter INFORMADO o valor da consulta ao paciente nesta conversa; (2) ter perguntado e recebido o NOME COMPLETO do próprio paciente; (3) confirmar data e hora com verificar_disponibilidade. NUNCA agende sem o valor informado e sem o nome dito pelo paciente (não use o nome salvo do contato).",
+      "Cria o agendamento. Só chame DEPOIS de: (1) ter INFORMADO o valor da consulta ao paciente nesta conversa; (2) ter perguntado e recebido o NOME COMPLETO do próprio paciente; (3) confirmar data e hora com verificar_disponibilidade. NUNCA agende sem o valor informado e sem o nome dito pelo paciente (não use o nome salvo do contato). O 'local' deve bater com a data (viagem só nas datas de viagem; caso contrário é o consultório base).",
     parameters: {
       type: "object",
       properties: {
         data: { type: "string", description: "Data no formato AAAA-MM-DD" },
         hora: { type: "string", description: "Hora no formato HH:MM (24h)" },
         servico: { type: "string", description: "Tipo de atendimento" },
+        local: {
+          type: "string",
+          description:
+            "A cidade/consultório que você confirmou com o paciente (ex.: 'Leblon' (Rio) ou 'Guaçuí'). Deve corresponder ao local que verificar_disponibilidade retornou para essa data — NUNCA marque uma viagem numa data que não seja de viagem.",
+        },
         nome_paciente: {
           type: "string",
           description:

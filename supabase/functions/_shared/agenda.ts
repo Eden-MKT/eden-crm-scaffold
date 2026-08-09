@@ -454,7 +454,9 @@ export function buildAgendaPrompt(
   - Base regular (${DEFAULT_LEBLON_LABEL}): grade semanal abaixo. Endereço: ${DEFAULT_LEBLON_ADDRESS}.
   - Viagens / outro município (só nas datas cadastradas):
 ${tripLines.map((l) => `  ${l}`).join("\n")}
-- Quando o paciente for agendar, pergunte se prefere Rio (Leblon) ou a cidade da viagem (se houver datas futuras). Nunca invente datas de viagem — use só as listadas acima e a ferramenta.`
+- REGRA DE LOCAL (crítica): o local de CADA data é definido pela DATA, NUNCA pela cidade ou DDD do paciente. Um paciente de Guaçuí NÃO significa que o atendimento será em Guaçuí. Guaçuí (ou qualquer viagem) SÓ existe nas datas de viagem listadas acima; em QUALQUER outra data o atendimento é em ${DEFAULT_LEBLON_LABEL} (Rio). Nunca chame uma data do Rio de "Guaçuí".
+- Se o paciente quer Guaçuí/a cidade da viagem: ofereça APENAS as datas de viagem listadas. Se ele pedir uma data que não é de viagem, explique com clareza que naquela data o atendimento é no Rio (Leblon) e diga a próxima data de viagem disponível — NÃO marque a viagem numa data que não seja de viagem.
+- Sempre confie no campo "local"/"endereco" que verificar_disponibilidade retornou para aquela data — é a verdade sobre onde será. Nunca deduza o local por conta própria.`
     : `
 - Local padrão: ${DEFAULT_LEBLON_LABEL} — ${DEFAULT_LEBLON_ADDRESS}.`;
 
@@ -464,8 +466,14 @@ AGENDAMENTO (você pode agendar diretamente no sistema):
   conversa nessa direção, com cordialidade e sem pressão.
 - Enquanto o paciente demonstrar interesse e ainda não agendou, um "ok/tá/entendi" é apenas
   CONFIRMAÇÃO — siga em frente (ex.: ofereça horários, confirme os dados). Não encerre no meio.
-- Se o paciente disser que não quer agendar agora ou demonstrar desinteresse, NÃO insista:
-  encerre com cordialidade e deixe a porta aberta.
+- Quando o paciente HESITAR ou adiar ("ainda não", "vou pensar", "depois", "não agora"), NÃO
+  encerre de cara: faça UMA única pergunta gentil e acolhedora para entender o que está
+  segurando — ex.: "Claro! Só pra eu te ajudar melhor: ficou alguma dúvida ou tem algo te
+  segurando pra agendar agora — o valor, a data ou o local? 😊". Trate a resposta: se for VALOR,
+  reforce o benefício/parcelamento (sem baixar preço); se for DATA/LOCAL, ofereça alternativas;
+  se for medo/receio, acolha. Só DEPOIS dessa sondagem, se o paciente reafirmar que não quer
+  agora, encerre com cordialidade e deixe a porta aberta. NUNCA insista mais de uma vez nem
+  pressione — uma sondagem, e respeite a decisão.
 - Tipos de atendimento disponíveis:
 ${svc || "- Consulta (~60 min)"}
 - Horário de atendimento (base Rio / Leblon): ${hoursLines}${lunch}. Fuso: ${tz}.${tripsBlock}

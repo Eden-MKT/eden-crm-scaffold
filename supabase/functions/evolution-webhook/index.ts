@@ -528,6 +528,7 @@ async function handleAgendar(
     valor_informado?: boolean;
     nascimento?: string;
     cpf?: string;
+    local?: string;
   } = {};
   try {
     args = JSON.parse(argsJson || "{}");
@@ -578,6 +579,32 @@ async function handleAgendar(
   const service = resolveService(services, args.servico);
   const startsAt = zonedToUtc(args.data, args.hora, tz);
   const loc = resolveLocationForDate(trips, args.data);
+
+  // TRAVA DE LOCAL: a IA às vezes assume a cidade pelo DDD do paciente e "promete"
+  // uma viagem (ex.: Guaçuí) numa data que na verdade é do Rio. Se a IA declarou
+  // um local que contradiz o local REAL da data (definido pela agenda de viagens),
+  // recusa e manda oferecer as datas certas.
+  const declaredLocal = String(args.local ?? "").trim();
+  if (declaredLocal) {
+    const norm = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    const declaredIsBase = /\b(rio|leblon|rb ?clinique|consultorio|base)\b/.test(
+      norm(declaredLocal),
+    );
+    const declaredMatchesReal =
+      norm(loc.label).includes(norm(declaredLocal)) ||
+      norm(declaredLocal).includes(norm(loc.label));
+    // Contradição: (data é viagem, mas a IA disse a base) OU (data é base, mas a IA disse uma viagem).
+    const contradiz = loc.isTrip ? declaredIsBase : !declaredIsBase && !declaredMatchesReal;
+    if (contradiz) {
+      const [yy, mm, dd] = args.data.split("-");
+      return {
+        ok: false,
+        faltou: "local",
+        motivo: `A data ${dd}/${mm} é em ${loc.label} (${loc.address}), não em "${declaredLocal}". Se o paciente quer "${declaredLocal}", ofereça APENAS as datas de viagem corretas; caso contrário, confirme com ele que nessa data o atendimento é em ${loc.label} antes de agendar.`,
+      };
+    }
+  }
+
   const localParts = utcToZonedParts(startsAt, tz);
   const confirmado = {
     data: localParts.dateISO,
