@@ -19,6 +19,15 @@ const BATCH = 20;
 // deno-lint-ignore no-explicit-any
 type DB = any;
 
+// Janela de envio de follow-up PROATIVO: 08:00–20:59 (para às 21:00), fuso do
+// Brasil. Evita mensagem de madrugada. Não afeta a resposta da IA a quem escreve.
+const FOLLOWUP_START_HOUR = 8;
+const FOLLOWUP_END_HOUR = 21; // exclusivo — envia enquanto hora < 21
+function withinFollowupWindow(now: Date, tz = "America/Sao_Paulo"): boolean {
+  const h = Number(utcToZonedParts(now, tz).time.slice(0, 2));
+  return h >= FOLLOWUP_START_HOUR && h < FOLLOWUP_END_HOUR;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return preflight();
 
@@ -43,6 +52,7 @@ Deno.serve(async (req) => {
 // Fase A — manuais
 // ---------------------------------------------------------------------------
 async function runManual(db: DB) {
+  if (!withinFollowupWindow(new Date())) return { skipped: "fora do horário (08–21)" };
   const { data: due } = await db
     .from("follow_ups")
     .select("id, conversation_id, agent_id, message")
@@ -98,6 +108,8 @@ async function runManual(db: DB) {
 // Fase B — cadência automática (12h/24h/48h) com bom senso
 // ---------------------------------------------------------------------------
 async function runAuto(db: DB) {
+  if (!withinFollowupWindow(new Date()))
+    return { agents: 0, sent: 0, skipped: 0, exhausted: 0, window: "fora do horário (08–21)" };
   const { data: agents } = await db
     .from("whatsapp_agents")
     .select("id, instance_name, followup_config, business_info, responsible_name, greeting")
