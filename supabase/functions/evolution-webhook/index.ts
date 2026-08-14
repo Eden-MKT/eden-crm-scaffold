@@ -1027,6 +1027,14 @@ async function runPipeline(
   if (claimErr) console.error("claim_ai_run error:", claimErr.message);
   if (!claimed) return;
 
+  // Marca a mensagem inbound como já respondida — usado pela guarda anti-resposta
+  // -dupla (abaixo) e pelo auto-heal (finally). Chamado em todo ponto terminal.
+  const markAnswered = () =>
+    db
+      .from("whatsapp_conversations")
+      .update({ last_answered_inbound_message_id: triggerMessageId })
+      .eq("id", conversationId);
+
   // "digitando…" durante toda a geração (buffer + OpenAI + tools) — sem isso o
   // lead vê silêncio na parte mais longa. Fire-and-forget: a Evolution segura a
   // request pelo tempo do delay, então NÃO aguardamos (não atrasa a resposta).
@@ -1039,10 +1047,15 @@ async function runPipeline(
     const { data: conv } = await db
       .from("whatsapp_conversations")
       .select(
-        "contact_name, context_summary, patient_id, human_takeover, objections_handled, lead_temperature, conversion_probability",
+        "contact_name, context_summary, patient_id, human_takeover, objections_handled, lead_temperature, conversion_probability, last_answered_inbound_message_id",
       )
       .eq("id", conversationId)
       .maybeSingle();
+
+    // Guarda anti-resposta-dupla: se esta inbound já foi respondida (ex.: um run
+    // duplicado disparado pelo auto-heal), não responde de novo.
+    if (conv?.last_answered_inbound_message_id === triggerMessageId) return;
+
     const contact = {
       name: conv?.contact_name ?? null,
       phone: leadPhone,
@@ -1388,12 +1401,18 @@ async function runPipeline(
       break;
     }
 
-    if (!finalText) return;
+    if (!finalText) {
+      await markAnswered(); // turno concluído sem texto — conta como respondida
+      return;
+    }
 
     // Encerramento: se a IA emitiu o marcador de "sem resposta", não envia nada.
     if (finalText.includes(NO_REPLY)) {
       const cleaned = finalText.split(NO_REPLY).join("").trim();
-      if (!cleaned) return; // conversa já encerrada — silêncio
+      if (!cleaned) {
+        await markAnswered(); // silêncio proposital — conta como respondida
+        return;
+      }
       finalText = cleaned; // sobrou texto real: envia sem o marcador
     }
 
@@ -1425,6 +1444,14 @@ async function runPipeline(
       objecaoVideo,
       objsHandled,
     });
+
+    // Marca como respondida e LIBERA o claim já: o resumo/Monday abaixo não
+    // precisam segurar o lock — segurá-lo bloqueava o run da próxima mensagem
+    // do cliente (foi o que deixou o 3º áudio sem resposta).
+    await db
+      .from("whatsapp_conversations")
+      .update({ last_answered_inbound_message_id: triggerMessageId, ai_claimed_at: null })
+      .eq("id", conversationId);
 
     // ShortMemory: atualiza o resumo da conversa (barato, todo agente) —
     // alimenta análise, follow-ups e o painel Markei.
@@ -1486,6 +1513,36 @@ async function runPipeline(
       .from("whatsapp_conversations")
       .update({ ai_claimed_at: null })
       .eq("id", conversationId);
+
+    // Auto-heal: se a ÚLTIMA mensagem do cliente ainda não foi respondida (burst
+    // de áudios escalonados, colisão de claim ou run de background perdido),
+    // dispara outro run para ela. A guarda anti-dupla + o claim garantem que ela
+    // seja respondida "exatamente uma vez". O "!== triggerMessageId" evita loop
+    // infinito quando o próprio run falhou (o cliente reenvia se preciso).
+    try {
+      const { data: st } = await db
+        .from("whatsapp_conversations")
+        .select(
+          "last_inbound_message_id, last_answered_inbound_message_id, ai_paused, human_takeover",
+        )
+        .eq("id", conversationId)
+        .maybeSingle();
+      if (
+        st &&
+        !st.ai_paused &&
+        !st.human_takeover &&
+        st.last_inbound_message_id &&
+        st.last_inbound_message_id !== st.last_answered_inbound_message_id &&
+        st.last_inbound_message_id !== triggerMessageId
+      ) {
+        // deno-lint-ignore no-explicit-any
+        (globalThis as any).EdgeRuntime?.waitUntil(
+          runPipeline(db, agent, conversationId, remoteJid, st.last_inbound_message_id, leadPhone),
+        );
+      }
+    } catch (e) {
+      console.error("auto-heal check error", e);
+    }
   }
 }
 

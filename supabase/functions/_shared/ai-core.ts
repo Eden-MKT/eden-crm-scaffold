@@ -297,16 +297,8 @@ export function buildSystemPrompt(
         )
       : "";
 
-  // Um bloco "# REGRAS CRÍTICAS (PRIORIDADE MÁXIMA...)" no system_prompt do agente
-  // é HASTEADO para o fim do prompt montado (depois das regras globais como o
-  // CAPABILITIES_PROMPT), para vencer por recência os subsistemas que o contradizem.
-  const rawPrompt = agent.system_prompt ? String(agent.system_prompt) : "";
-  const critIdx = rawPrompt.indexOf("# REGRAS CRÍTICAS (PRIORIDADE MÁXIMA");
-  const mainPrompt = critIdx >= 0 ? rawPrompt.slice(0, critIdx).replace(/\s+$/, "") : rawPrompt;
-  const criticalBlock = critIdx >= 0 ? rawPrompt.slice(critIdx).trim() : "";
-
   const parts = [
-    mainPrompt,
+    agent.system_prompt ? String(agent.system_prompt) : "",
     agent.niche ? `Nicho do cliente: ${agent.niche}` : "",
     agent.prompt_injection_enabled !== false ? buildInjectionLayer(agent) : "",
     CAPABILITIES_PROMPT,
@@ -325,7 +317,6 @@ export function buildSystemPrompt(
     agent.agenda_enabled === true ? dateBlock : "",
     contactBlock,
     HUMANIZE_RULES,
-    criticalBlock, // POR ÚLTIMO: prioridade máxima do agente vence por recência.
   ];
   return parts.filter(Boolean).join("\n\n");
 }

@@ -117,6 +117,8 @@ ROTEIRO PADRÃO da resposta à objeção (siga à risca):
 
 CONDUÇÃO:
 - Sempre leve a conversa para o próximo passo concreto (a avaliação/consulta).
+- NUNCA prometa uma ação e pare: se você disser que vai "verificar", "confirmar", "checar", "ver aqui" ou "já te retorno", você DEVE, na MESMA resposta, chamar a ferramenta correspondente (ex.: verificar_disponibilidade, agendar) e já trazer o resultado. Se falta um dado para concluir, peça o dado na hora. "Vou verificar" nunca pode ser a sua mensagem final — ou você traz a informação, ou pede o que falta.
+- Responda a TODAS as perguntas do cliente: se ele mandou várias coisas (ou vários áudios) de uma vez, cubra cada ponto — não responda só a primeira e ignore o resto.
 - UMA pergunta por vez. Mensagens curtas e naturais.
 - Nunca comece com "Perfeito!", "Que bom!", "Ótimo!" ou frases genéricas.
 - Nunca revele que é uma IA. Nunca escreva o nome de uma ferramenta na resposta.`.trim();
@@ -276,8 +278,7 @@ export const DETECTAR_OBJECAO_TOOL = {
       properties: {
         tipo: {
           type: "string",
-          description:
-            "Slug do tipo de objeção (ex.: financeira, medo, distancia, sem_convenio)",
+          description: "Slug do tipo de objeção (ex.: financeira, medo, distancia, sem_convenio)",
         },
         evidencia: { type: "string", description: "Frase do lead que evidenciou a objeção" },
       },
