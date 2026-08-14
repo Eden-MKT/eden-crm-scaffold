@@ -9,6 +9,7 @@ import {
   toolsForAgent,
   type ContactAppointment,
 } from "../_shared/ai-core.ts";
+import { HANDOFF_NAO_JUSTIFICADO_RESULT, handoffJustified } from "../_shared/capabilities.ts";
 import {
   resolveService,
   utcToZonedParts,
@@ -134,14 +135,30 @@ Deno.serve(async (req) => {
             patientActions.push({ tool: tc.name, args: a });
             result = { ok: true, simulado: true };
           } else if (tc.name === "encaminhar_humano") {
-            handoff = true;
-            patientActions.push({ tool: tc.name, args: tc.arguments });
-            result = {
-              ok: true,
-              simulado: true,
-              instrucao:
-                "Avise ao lead, com simpatia e em uma frase, que a pessoa responsável vai assumir a conversa por aqui. Esta é sua última mensagem.",
-            };
+            // Mesma TRAVA da produção: só encaminha se justificado.
+            let motivo = "";
+            try {
+              motivo = String(JSON.parse(tc.arguments || "{}").motivo ?? "");
+            } catch {
+              /* ignora */
+            }
+            const recentUser = history
+              .filter((m) => m.role === "user")
+              .slice(-3)
+              .map((m) => m.content ?? "")
+              .join(" ");
+            if (!handoffJustified(recentUser, motivo)) {
+              result = HANDOFF_NAO_JUSTIFICADO_RESULT;
+            } else {
+              handoff = true;
+              patientActions.push({ tool: tc.name, args: tc.arguments });
+              result = {
+                ok: true,
+                simulado: true,
+                instrucao:
+                  "Avise ao lead, com simpatia e em uma frase, que a pessoa responsável vai assumir a conversa por aqui. Esta é sua última mensagem.",
+              };
+            }
           } else if (tc.name === "confirmar_presenca" || tc.name === "cancelar_consulta") {
             patientActions.push({ tool: tc.name, args: {} });
             result = { ok: true, simulado: true };

@@ -119,6 +119,7 @@ CONDUÇÃO:
 - Sempre leve a conversa para o próximo passo concreto (a avaliação/consulta).
 - NUNCA prometa uma ação e pare: se você disser que vai "verificar", "confirmar", "checar", "ver aqui" ou "já te retorno", você DEVE, na MESMA resposta, chamar a ferramenta correspondente (ex.: verificar_disponibilidade, agendar) e já trazer o resultado. Se falta um dado para concluir, peça o dado na hora. "Vou verificar" nunca pode ser a sua mensagem final — ou você traz a informação, ou pede o que falta.
 - Responda a TODAS as perguntas do cliente: se ele mandou várias coisas (ou vários áudios) de uma vez, cubra cada ponto — não responda só a primeira e ignore o resto.
+- NÃO diga que vai "encaminhar para a secretária", "passar para um humano" ou "transferir seu atendimento" a menos que vá REALMENTE fazer isso (com a ferramenta encaminhar_humano) por um motivo válido: o cliente pediu falar com uma pessoa/ligação, urgência médica, ou a agenda falhou. Um problema técnico (vídeo/imagem que não abre) ou uma dúvida que você mesma resolve NÃO é motivo — nesse caso, resolva e continue, SEM mencionar secretária/humano.
 - UMA pergunta por vez. Mensagens curtas e naturais.
 - Nunca comece com "Perfeito!", "Que bom!", "Ótimo!" ou frases genéricas.
 - Nunca revele que é uma IA. Nunca escreva o nome de uma ferramenta na resposta.`.trim();
@@ -256,7 +257,7 @@ export const ENCAMINHAR_HUMANO_TOOL = {
   function: {
     name: "encaminhar_humano",
     description:
-      "Transfere a conversa para o atendente humano (pausa a IA e notifica a equipe). Use quando o lead pedir para falar com uma pessoa, quando você não conseguir resolver, ou quando a situação for delicada demais.",
+      "Transfere a conversa para um atendente humano (pausa a IA e notifica a equipe). É o ÚLTIMO recurso, não a saída fácil. Use SOMENTE quando: (1) o paciente PEDIR explicitamente falar com uma pessoa/secretária ou pedir uma ligação; (2) houver sinal de urgência médica; (3) a ferramenta de agenda falhar de verdade; (4) o paciente pedir uma condição comercial fora das regras autorizadas; ou (5) houver reclamação grave/sensível ou risco. NUNCA encaminhe por: um vídeo/imagem/áudio que não abre ou outro problema técnico; uma dúvida que você mesma pode responder ou esclarecer; ou só porque não sabe um detalhe pequeno. Nesses casos NÃO encaminhe — continue o atendimento normalmente: peça desculpas, reexplique em texto, ofereça reenviar a mídia e conduza para unidade, preço e agendamento.",
     parameters: {
       type: "object",
       properties: {
@@ -265,6 +266,41 @@ export const ENCAMINHAR_HUMANO_TOOL = {
       required: ["motivo"],
     },
   },
+};
+
+// TRAVA de encaminhamento: o gpt-4o encaminha por bobagem ("vídeo não abre",
+// "não sei X") e aborta o atendimento. A descrição da ferramenta não segura —
+// aqui é enforcement real. Só encaminha quando: o paciente PEDIU falar com uma
+// pessoa/ligação; há urgência médica; a ferramenta de agenda falhou; ou pediram
+// condição fora das regras. Recebe o texto das últimas mensagens do paciente e o
+// motivo informado pelo modelo. Compartilhado entre produção e simulador.
+export function handoffJustified(recentUserText: string, motivo: string): boolean {
+  const u = (recentUserText ?? "").toLowerCase();
+  const m = (motivo ?? "").toLowerCase();
+  const pediuHumano =
+    /falar com (algu[ée]m|uma pessoa|atendente|secret|o doutor|a doutora|dr\b)|atendente|secret[aá]ri|quero (falar com )?uma pessoa|falar por telefone|me liga\b|pode (me )?ligar|liga[çc][ãa]o|n[úu]mero (do|da) (doutor|dr|secret)/.test(
+      u,
+    );
+  const urgencia =
+    /urg[êe]ncia|emerg[êe]ncia|passando mal|risco de vida|desmai|falta de ar|dor no peito|pronto.?socorro|hospital agora|sangrando muito/.test(
+      u + " " + m,
+    );
+  const falhaAgenda =
+    /(agenda|disponibilidade|ferramenta|sistema).{0,25}(falh|erro|indispon|fora do ar|n[ãa]o (respond|funcion|carreg))/.test(
+      m,
+    );
+  const foraDasRegras =
+    /fora das regras|condi[çc][ãa]o.{0,20}(n[ãa]o autoriz|especial)|desconto.{0,20}(n[ãa]o autoriz|acima|especial)/.test(
+      m,
+    );
+  return pediuHumano || urgencia || falhaAgenda || foraDasRegras;
+}
+
+export const HANDOFF_NAO_JUSTIFICADO_RESULT = {
+  ok: false,
+  nao_encaminhar: true,
+  instrucao:
+    "NÃO encaminhe para humano agora: o paciente NÃO pediu falar com uma pessoa e não há urgência médica nem falha de agenda. Resolva você mesma — se algo deu errado (ex.: um vídeo/imagem que não abre), peça desculpas, explique em texto e ofereça reenviar; depois continue normalmente e conduza para unidade, valor e agendamento. Responda a pergunta do paciente na mesma mensagem.",
 };
 
 export const DETECTAR_OBJECAO_TOOL = {

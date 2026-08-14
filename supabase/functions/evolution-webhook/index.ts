@@ -28,6 +28,8 @@ import { buildSystemPrompt, handleVerificar, toolsForAgent } from "../_shared/ai
 import {
   buildHandoffNotification,
   buildPatientBlock,
+  HANDOFF_NAO_JUSTIFICADO_RESULT,
+  handoffJustified,
   handoffPhones,
   type PatientRecord,
 } from "../_shared/capabilities.ts";
@@ -1268,39 +1270,54 @@ async function runPipeline(
             } catch {
               /* ignora */
             }
-            await db
-              .from("whatsapp_conversations")
-              .update({
-                human_takeover: true,
-                human_takeover_at: new Date().toISOString(),
-                ai_paused: true,
-              })
-              .eq("id", conversationId);
-            const notice = buildHandoffNotification(
-              agent,
-              { contact_name: contact.name, remote_jid: remoteJid },
-              conv?.context_summary ?? null,
-              args.motivo,
-            );
-            for (const tel of handoffPhones(agent)) {
-              const digits = tel.replace(/\D/g, "");
-              if (!digits) continue;
-              try {
-                await evo.sendText(
-                  String(agent.instance_name),
-                  `${digits}@s.whatsapp.net`,
-                  notice,
-                  0,
-                );
-              } catch (e) {
-                console.error("handoff notify error", e);
+            // TRAVA: só encaminha quando REALMENTE justificado (helper compartilhado).
+            // O gpt-4o encaminhava por bobagem ("vídeo não abre") e abortava o
+            // atendimento; a descrição da ferramenta não segurou.
+            const recentUser = (ordered as { sender: string; content: string | null }[])
+              .filter((m) => m.sender === "contact")
+              .slice(-3)
+              .map((m) => m.content ?? "")
+              .join(" ");
+            if (!handoffJustified(recentUser, args.motivo ?? "")) {
+              console.warn(
+                `encaminhar_humano BLOQUEADO (não justificado) conv=${conversationId} motivo="${args.motivo ?? ""}"`,
+              );
+              result = HANDOFF_NAO_JUSTIFICADO_RESULT;
+            } else {
+              await db
+                .from("whatsapp_conversations")
+                .update({
+                  human_takeover: true,
+                  human_takeover_at: new Date().toISOString(),
+                  ai_paused: true,
+                })
+                .eq("id", conversationId);
+              const notice = buildHandoffNotification(
+                agent,
+                { contact_name: contact.name, remote_jid: remoteJid },
+                conv?.context_summary ?? null,
+                args.motivo,
+              );
+              for (const tel of handoffPhones(agent)) {
+                const digits = tel.replace(/\D/g, "");
+                if (!digits) continue;
+                try {
+                  await evo.sendText(
+                    String(agent.instance_name),
+                    `${digits}@s.whatsapp.net`,
+                    notice,
+                    0,
+                  );
+                } catch (e) {
+                  console.error("handoff notify error", e);
+                }
               }
+              result = {
+                ok: true,
+                instrucao:
+                  "Avise ao lead, com simpatia e em uma frase, que a pessoa responsável vai assumir a conversa por aqui. Esta é sua última mensagem — o humano assume a partir daqui.",
+              };
             }
-            result = {
-              ok: true,
-              instrucao:
-                "Avise ao lead, com simpatia e em uma frase, que a pessoa responsável vai assumir a conversa por aqui. Esta é sua última mensagem — o humano assume a partir daqui.",
-            };
           } else if (tc.name === "confirmar_presenca" && agendaOn) {
             const { data: next } = await db
               .from("appointments")
