@@ -145,6 +145,24 @@ interface Extracted {
   mime: string | null;
 }
 
+// Resumo curto da mensagem CITADA (quando o paciente responde citando uma bolha
+// anterior). Sem isso o modelo recebe só "esse"/"esse aí" e perde o referente
+// (ex.: paciente cita a bolha "Guaçuí" e escreve "esse" → a IA não sabia qual).
+// deno-lint-ignore no-explicit-any
+function quotedSummary(q: any): string {
+  if (!q || typeof q !== "object") return "";
+  let t = "";
+  if (typeof q.conversation === "string") t = q.conversation;
+  else if (typeof q.extendedTextMessage?.text === "string") t = q.extendedTextMessage.text;
+  else if (q.imageMessage) t = q.imageMessage.caption || "[imagem]";
+  else if (q.videoMessage) t = q.videoMessage.caption || "[vídeo]";
+  else if (q.audioMessage) t = "[áudio]";
+  else if (q.documentMessage) t = `[documento: ${q.documentMessage.fileName ?? "arquivo"}]`;
+  else if (q.stickerMessage) t = "[figurinha]";
+  t = String(t).replace(/\s+/g, " ").trim();
+  return t.length > 200 ? `${t.slice(0, 200)}…` : t;
+}
+
 async function extractMessage(
   db: DB,
   instance: string,
@@ -158,13 +176,16 @@ async function extractMessage(
 
   if (typeof msg.conversation === "string")
     return { type: "text", content: msg.conversation, mediaBytes: null, mime: null };
-  if (msg.extendedTextMessage?.text)
+  if (msg.extendedTextMessage?.text) {
+    const quoted = quotedSummary(msg.extendedTextMessage?.contextInfo?.quotedMessage);
+    const text = String(msg.extendedTextMessage.text);
     return {
       type: "text",
-      content: msg.extendedTextMessage.text,
+      content: quoted ? `[Em resposta a: "${quoted}"]\n${text}` : text,
       mediaBytes: null,
       mime: null,
     };
+  }
 
   // Descobre a mídia base64 (webhook.base64:true entrega em msg.base64) ou fallback.
   async function mediaBytes(): Promise<Uint8Array | null> {

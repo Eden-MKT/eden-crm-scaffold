@@ -324,6 +324,37 @@ export async function freeSlots(
   return slots;
 }
 
+// Soma dias a uma data "YYYY-MM-DD" (aritmética em UTC, date-only — seguro sem DST).
+function addDaysISO(dateISO: string, n: number): string {
+  const d = new Date(`${dateISO}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+// Primeiro dia (a partir de fromISO+1) com horários livres. Cobre grade semanal
+// E dias de viagem. Usado quando o dia pedido (ex.: "hoje" já tarde) volta vazio,
+// para a IA oferecer o próximo horário comercial em vez de só "não tem hoje".
+export async function nextAvailableDay(
+  db: DB,
+  opts: {
+    clientId: string;
+    fromISO: string;
+    durationMin: number;
+    hours: AgendaHours;
+    tz: string;
+    trips?: AgendaTrip[];
+    maxDays?: number;
+  },
+): Promise<{ dateISO: string; slots: string[] } | null> {
+  const { clientId, fromISO, durationMin, hours, tz, trips = [], maxDays = 21 } = opts;
+  for (let i = 1; i <= maxDays; i++) {
+    const dateISO = addDaysISO(fromISO, i);
+    const slots = await freeSlots(db, { clientId, dateISO, durationMin, hours, tz, trips });
+    if (slots.length) return { dateISO, slots };
+  }
+  return null;
+}
+
 export async function isFree(
   db: DB,
   clientId: string,

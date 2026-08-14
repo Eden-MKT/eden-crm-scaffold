@@ -6,6 +6,7 @@ import {
   freeSlots,
   FUTURE_ACTIVE_STATUSES,
   MEDICAL_PROMPT,
+  nextAvailableDay,
   parseAgendaTrips,
   resolveLocationForDate,
   resolveService,
@@ -296,8 +297,16 @@ export function buildSystemPrompt(
         )
       : "";
 
+  // Um bloco "# REGRAS CRÍTICAS (PRIORIDADE MÁXIMA...)" no system_prompt do agente
+  // é HASTEADO para o fim do prompt montado (depois das regras globais como o
+  // CAPABILITIES_PROMPT), para vencer por recência os subsistemas que o contradizem.
+  const rawPrompt = agent.system_prompt ? String(agent.system_prompt) : "";
+  const critIdx = rawPrompt.indexOf("# REGRAS CRÍTICAS (PRIORIDADE MÁXIMA");
+  const mainPrompt = critIdx >= 0 ? rawPrompt.slice(0, critIdx).replace(/\s+$/, "") : rawPrompt;
+  const criticalBlock = critIdx >= 0 ? rawPrompt.slice(critIdx).trim() : "";
+
   const parts = [
-    agent.system_prompt ? String(agent.system_prompt) : "",
+    mainPrompt,
     agent.niche ? `Nicho do cliente: ${agent.niche}` : "",
     agent.prompt_injection_enabled !== false ? buildInjectionLayer(agent) : "",
     CAPABILITIES_PROMPT,
@@ -316,6 +325,7 @@ export function buildSystemPrompt(
     agent.agenda_enabled === true ? dateBlock : "",
     contactBlock,
     HUMANIZE_RULES,
+    criticalBlock, // POR ÚLTIMO: prioridade máxima do agente vence por recência.
   ];
   return parts.filter(Boolean).join("\n\n");
 }
@@ -351,6 +361,36 @@ export async function handleVerificar(
   });
   const loc = resolveLocationForDate(trips, args.data);
 
+  // Se o dia pedido (ex.: "hoje" já tarde) não tem vaga, já entrega o próximo dia
+  // com horários — o modelo oferece o próximo horário comercial em vez de só negar.
+  let proxima: {
+    data: string;
+    dia_semana: string;
+    local: string;
+    endereco: string;
+    horarios_livres: string[];
+  } | null = null;
+  if (!slots.length) {
+    const next = await nextAvailableDay(db, {
+      clientId: String(agent.client_id ?? "00000000-0000-0000-0000-000000000000"),
+      fromISO: args.data,
+      durationMin: service.durationMin,
+      hours,
+      tz,
+      trips,
+    });
+    if (next) {
+      const nloc = resolveLocationForDate(trips, next.dateISO);
+      proxima = {
+        data: next.dateISO,
+        dia_semana: weekdayLabelPtBr(next.dateISO, tz),
+        local: nloc.label,
+        endereco: nloc.address,
+        horarios_livres: next.slots,
+      };
+    }
+  }
+
   let ownTimes: string[] = [];
   if (conversationId) {
     const { data: own } = await db
@@ -382,6 +422,13 @@ export async function handleVerificar(
             "Os horários acima em 'agendamentos_do_proprio_contato' já são DESTE cliente — não são conflito para ele; não os trate como ocupados nem ofereça reagendar sem ele pedir.",
         }
       : {}),
-    ...(slots.length ? {} : { aviso: "Sem horários livres nesse dia; sugira outra data." }),
+    ...(slots.length
+      ? {}
+      : proxima
+        ? {
+            aviso: `Sem horários nesse dia. PRÓXIMO dia com vaga: ${proxima.data} (${proxima.dia_semana}). Ofereça esses horários — não deixe o paciente chutando datas.`,
+            proxima_data_disponivel: proxima,
+          }
+        : { aviso: "Sem horários livres nesse dia; sugira outra data." }),
   };
 }
