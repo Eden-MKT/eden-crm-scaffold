@@ -11,6 +11,16 @@ import {
 } from "../_shared/ai-core.ts";
 import { HANDOFF_NAO_JUSTIFICADO_RESULT, handoffJustified } from "../_shared/capabilities.ts";
 import {
+  classifyStrategy,
+  criticReview,
+  runGuards,
+  salesModel,
+  shouldCritic,
+  type CriticVerdict,
+  type GuardResult,
+  type Strategy,
+} from "../_shared/orchestrator.ts";
+import {
   resolveService,
   utcToZonedParts,
   zonedToUtc,
@@ -46,10 +56,25 @@ Deno.serve(async (req) => {
   const contactAppointments = Array.isArray(body.contactAppointments)
     ? body.contactAppointments
     : [];
-  const model = String(agent.model ?? "gpt-4o");
   // Ações de paciente/handoff simuladas neste turno (dry-run).
   const patientActions: { tool: string; args: unknown }[] = [];
   let handoff = false;
+
+  // Espelha a cadeia orquestrada da produção (dry-run). Harness liga com orchestrate:true.
+  const orchestrate = body.orchestrate === true;
+  const ordered = history.map((m: { role: string; content: string | null }) => ({
+    sender: m.role === "user" ? "contact" : "ai",
+    content: m.content,
+  }));
+  const lastUserText = [...ordered].reverse().find((m) => m.sender === "contact")?.content ?? "";
+  const simConvId = String(body.conversationId ?? "00000000-0000-0000-0000-000000000000");
+  const strategy: Strategy | null = orchestrate
+    ? await classifyStrategy(db, String(agent.id ?? ""), simConvId, ordered, body.conv)
+    : null;
+  const model = salesModel(agent);
+  let guardInfo: GuardResult | null = null;
+  let criticInfo: CriticVerdict | null = null;
+  let revised = false;
 
   const messages: ChatMessage[] = [
     {
@@ -60,6 +85,7 @@ Deno.serve(async (req) => {
         contactAppointments,
         body.patientBlock,
         body.conv ?? undefined,
+        strategy,
       ),
     },
     ...history.map((m) => ({ role: m.role, content: m.content })),
@@ -72,7 +98,7 @@ Deno.serve(async (req) => {
 
   try {
     let finalText: string | null = null;
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 5; i++) {
       const r = await chat({
         model,
         messages,
@@ -176,11 +202,46 @@ Deno.serve(async (req) => {
         }
         continue;
       }
-      finalText = r.content;
+
+      const candidate = r.content ?? "";
+      if (orchestrate && !revised && candidate && !candidate.includes(NO_REPLY)) {
+        const guard = runGuards(candidate, {
+          toolNames: calledTools,
+          recentUserText: lastUserText,
+        });
+        guardInfo = guard;
+        let fix = guard.ok ? "" : guard.fix;
+        if (guard.ok && strategy && shouldCritic(strategy, lastUserText)) {
+          criticInfo = await criticReview(db, String(agent.id ?? ""), simConvId, {
+            strategy,
+            lastUserText,
+            draft: candidate,
+            hard: false,
+          });
+          if (criticInfo.verdict === "revise") fix = criticInfo.fix || guard.fix;
+        }
+        if (fix) {
+          revised = true;
+          messages.push({ role: "assistant", content: candidate });
+          messages.push({
+            role: "system",
+            content: `REVISÃO OBRIGATÓRIA antes de enviar ao cliente: ${fix} Reescreva sua última mensagem corrigindo isso; se precisar de uma ferramenta (ex.: verificar_disponibilidade), chame-a agora.`,
+          });
+          continue;
+        }
+      }
+      finalText = candidate;
       break;
     }
 
-    const extras = { patientActions, handoff };
+    const extras = {
+      patientActions,
+      handoff,
+      strategy,
+      guard: guardInfo,
+      critic: criticInfo,
+      revised,
+    };
 
     if (!finalText)
       return json({

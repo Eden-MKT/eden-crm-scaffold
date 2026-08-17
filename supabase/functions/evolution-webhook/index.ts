@@ -26,6 +26,14 @@ import {
 } from "../_shared/agenda.ts";
 import { buildSystemPrompt, handleVerificar, toolsForAgent } from "../_shared/ai-core.ts";
 import {
+  classifyStrategy,
+  criticReview,
+  runGuards,
+  salesModel,
+  shouldCritic,
+  type Strategy,
+} from "../_shared/orchestrator.ts";
+import {
   buildHandoffNotification,
   buildPatientBlock,
   HANDOFF_NAO_JUSTIFICADO_RESULT,
@@ -1120,11 +1128,32 @@ async function runPipeline(
       .limit(HISTORY);
     const ordered = (history ?? []).reverse();
 
-    const model = String(agent.model ?? "gpt-4o-mini");
+    // IA orquestrada (cadeia de 3 papéis). Gate: kill-switch global (env) +
+    // opt-in por agente. Desligado → caminho legado, idêntico ao de hoje.
+    const orchestrate =
+      Deno.env.get("ORCHESTRATOR_KILL") !== "1" && agent.orchestrator_enabled === true;
+    // [1] Roteador: estratégia do turno (modelo pequeno). Erro/flag off → null.
+    const strategy: Strategy | null = orchestrate
+      ? await classifyStrategy(db, String(agent.id), conversationId, ordered, conv)
+      : null;
+    const lastUserText =
+      [...(ordered as { sender: string; content: string | null }[])]
+        .reverse()
+        .find((m) => m.sender === "contact")?.content ?? "";
+
+    // [2] Vendedor: modelo por papel (sales_model → model → gpt-4o).
+    const model = salesModel(agent);
     const messages: ChatMessage[] = [
       {
         role: "system",
-        content: buildSystemPrompt(agent, contact, contactAppointments, patientBlock, conv),
+        content: buildSystemPrompt(
+          agent,
+          contact,
+          contactAppointments,
+          patientBlock,
+          conv,
+          strategy,
+        ),
       },
       ...ordered.map((m: { sender: string; content: string | null }) => ({
         role: (m.sender === "contact" ? "user" : "assistant") as "user" | "assistant",
@@ -1134,6 +1163,8 @@ async function runPipeline(
 
     const agendaOn = agent.agenda_enabled === true;
     const tools = toolsForAgent(agent);
+    const calledTools: string[] = [];
+    let revised = false; // garante no máximo UMA regeneração pelo orquestrador
 
     // Vídeo de objeção a intercalar entre as bolhas nesta rodada (se houver).
     let objecaoVideo: { url: string; tipo: string } | null = null;
@@ -1147,8 +1178,10 @@ async function runPipeline(
     >;
 
     let finalText: string | null = null;
-    // 4 iterações: permite verificar_disponibilidade -> agendar no mesmo turno.
-    for (let i = 0; i < 4; i++) {
+    // 5 iterações: 4 p/ verificar_disponibilidade -> agendar no mesmo turno + 1
+    // para a eventual regeneração do orquestrador.
+    for (let i = 0; i < 5; i++) {
+      const t0 = Date.now();
       const r = await chat({
         model,
         messages,
@@ -1164,11 +1197,13 @@ async function runPipeline(
         r.promptTokens,
         r.completionTokens,
         chatCostUsd(model, r.promptTokens, r.completionTokens),
+        Date.now() - t0,
       );
 
       if (r.toolCalls.length) {
         messages.push(r.assistant as ChatMessage);
         for (const tc of r.toolCalls) {
+          calledTools.push(tc.name);
           let result: unknown = { ok: true };
           if (tc.name === "marcar_conversao") {
             await db
@@ -1414,7 +1449,37 @@ async function runPipeline(
         }
         continue;
       }
-      finalText = r.content;
+
+      const candidate = r.content ?? "";
+      // [3] Orquestrador: travas determinísticas (sempre) + crítico LLM (só em
+      // turno de alto risco). Pode forçar UMA regeneração (nova iteração do loop).
+      // Não mexe em NO_REPLY (silêncio proposital) nem revisa duas vezes.
+      if (orchestrate && !revised && candidate && !candidate.includes(NO_REPLY)) {
+        const guard = runGuards(candidate, {
+          toolNames: calledTools,
+          recentUserText: lastUserText,
+        });
+        let fix = guard.ok ? "" : guard.fix;
+        if (guard.ok && strategy && shouldCritic(strategy, lastUserText)) {
+          const v = await criticReview(db, String(agent.id), conversationId, {
+            strategy,
+            lastUserText,
+            draft: candidate,
+            hard: false,
+          });
+          if (v.verdict === "revise") fix = v.fix || guard.fix;
+        }
+        if (fix) {
+          revised = true;
+          messages.push({ role: "assistant", content: candidate });
+          messages.push({
+            role: "system",
+            content: `REVISÃO OBRIGATÓRIA antes de enviar ao cliente: ${fix} Reescreva sua última mensagem corrigindo isso; se precisar de uma ferramenta (ex.: verificar_disponibilidade), chame-a agora.`,
+          });
+          continue;
+        }
+      }
+      finalText = candidate;
       break;
     }
 
@@ -1572,6 +1637,7 @@ async function logUsage(
   promptTokens: number,
   completionTokens: number,
   costUsd: number,
+  latencyMs?: number,
 ) {
   try {
     await db.from("whatsapp_usage").insert({
@@ -1582,6 +1648,7 @@ async function logUsage(
       prompt_tokens: promptTokens,
       completion_tokens: completionTokens,
       cost_usd: costUsd,
+      ...(typeof latencyMs === "number" ? { latency_ms: latencyMs } : {}),
     });
   } catch (e) {
     console.error("usage log error", e);

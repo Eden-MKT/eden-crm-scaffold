@@ -1,6 +1,7 @@
 // Núcleo do prompt/tools da IA de atendimento — compartilhado entre a produção
 // (evolution-webhook) e o simulador (simulate-turn), para não haver divergência.
 import { HUMANIZE_RULES } from "./humanize.ts";
+import type { Strategy } from "./orchestrator.ts";
 import {
   buildAgendaPrompt,
   freeSlots,
@@ -258,6 +259,20 @@ function buildResistanceBlock(conv?: {
   return "LEITURA DO LEAD: MORNO — explore dores, crie desejo com prova social, caminhe para o próximo passo.";
 }
 
+// Bloco de estratégia DO TURNO (do roteador/classificador). Coexiste com o bloco
+// de resistência (leitura de longo prazo): este são as táticas para esta resposta.
+// Sem estratégia (flag off ou classificador falhou) → "" (comportamento atual).
+export function buildStrategyBlock(strategy?: Strategy | null): string {
+  if (!strategy) return "";
+  const ready =
+    strategy.ready === "book"
+      ? "PRONTO para agendar — conduza ao fechamento com objetividade"
+      : "em NUTRIÇÃO — construa valor/confiança antes de puxar o agendamento";
+  const obj = strategy.objection !== "none" ? ` Provável objeção: ${strategy.objection}.` : "";
+  const cobrir = strategy.checks.length ? ` Cubra neste turno: ${strategy.checks.join(", ")}.` : "";
+  return `ESTRATÉGIA DESTE TURNO (roteador): lead ${strategy.temp}, ${ready}; tom ${strategy.tone}.${obj}${cobrir} Ainda assim, siga as regras de preço/agenda.`;
+}
+
 // System prompt completo do agente (idêntico em produção e simulação).
 // patientBlock: ficha novo/antigo montada por conversa (buildPatientBlock).
 export function buildSystemPrompt(
@@ -266,6 +281,7 @@ export function buildSystemPrompt(
   contactAppointments?: ContactAppointment[],
   patientBlock?: string,
   conv?: { lead_temperature?: string | null; conversion_probability?: number | null },
+  strategy?: Strategy | null,
 ): string {
   const contactBlock =
     `Dados do contato (vindos do WhatsApp): nome = ${
@@ -303,6 +319,7 @@ export function buildSystemPrompt(
     agent.prompt_injection_enabled !== false ? buildInjectionLayer(agent) : "",
     CAPABILITIES_PROMPT,
     buildResistanceBlock(conv),
+    buildStrategyBlock(strategy),
     agent.is_medical === true ? MEDICAL_PROMPT : "",
     agent.business_info ? `Informações do negócio: ${agent.business_info}` : "",
     buildKnowledgeBlock(agent),
