@@ -95,6 +95,7 @@ export function AgentSettingsSheet({
     responseDelaySeconds: agent.responseDelaySeconds,
     isMedical: agent.isMedical,
     agendaEnabled: agent.agendaEnabled,
+    priceHandoffEnabled: agent.priceHandoffEnabled,
     promptInjectionEnabled: agent.promptInjectionEnabled,
   });
   const [improving, setImproving] = useState(false);
@@ -158,6 +159,7 @@ export function AgentSettingsSheet({
       responseDelaySeconds: agent.responseDelaySeconds,
       isMedical: agent.isMedical,
       agendaEnabled: agent.agendaEnabled,
+      priceHandoffEnabled: agent.priceHandoffEnabled,
       promptInjectionEnabled: agent.promptInjectionEnabled,
     });
     setExtraFields(agent.extraFields);
@@ -739,6 +741,20 @@ export function AgentSettingsSheet({
                 <Switch
                   checked={form.agendaEnabled}
                   onCheckedChange={(v) => set("agendaEnabled", v)}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Transferir p/ secretária no preço</p>
+                  <p className="text-xs text-muted-foreground">
+                    Quando o paciente perguntar o valor, a IA avisa o grupo da equipe e passa o
+                    atendimento pra secretária (em vez de responder o preço).
+                  </p>
+                </div>
+                <Switch
+                  checked={form.priceHandoffEnabled}
+                  onCheckedChange={(v) => set("priceHandoffEnabled", v)}
                 />
               </div>
 

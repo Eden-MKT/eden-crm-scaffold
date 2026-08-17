@@ -157,6 +157,7 @@ export interface WhatsappAgent {
   responseDelaySeconds: number;
   isMedical: boolean;
   agendaEnabled: boolean;
+  priceHandoffEnabled: boolean;
   agendaNotifyGroupJid: string;
   groupConsultTopics: string[];
   agendaTimezone: string;
@@ -314,6 +315,7 @@ export function mapAgent(row: AgentRow): WhatsappAgent {
     responseDelaySeconds: Number(row.response_delay_seconds ?? 15),
     isMedical: row.is_medical ?? false,
     agendaEnabled: row.agenda_enabled ?? false,
+    priceHandoffEnabled: row.price_handoff_enabled ?? false,
     agendaNotifyGroupJid: row.agenda_notify_group_jid ?? "",
     groupConsultTopics: Array.isArray(row.group_consult_topics)
       ? (row.group_consult_topics as unknown[]).map((t) => String(t)).filter(Boolean)

@@ -173,6 +173,66 @@ function quotedSummary(q: any): string {
   return t.length > 200 ? `${t.slice(0, 200)}…` : t;
 }
 
+// Pergunta sobre preço/valor (Dr. Rafael: no momento do preço, passa pra
+// secretária). Determinístico (roda antes da IA). Ignora o prefixo de resposta
+// citada "[Em resposta a: ...]" para não disparar por causa de uma bolha antiga.
+const RE_PRICE =
+  /\bpre[çc]os?\b|\bvalor(es)?\b|\binvestimento\b|\bor[çc]amento\b|quanto\s+(custa|fica|sai|é|e|cobra|voc[êe]s\s+cobram)|custa\s+quanto|sai\s+por\s+quanto|fica\s+quanto|tabela\s+de\s+(pre[çc]o|valor)/i;
+function isPriceQuestion(text: string): boolean {
+  const t = String(text ?? "").replace(/^\[Em resposta a:[^\]]*\]\s*/i, "");
+  return RE_PRICE.test(t);
+}
+
+// Transfere o atendimento para a secretária humana no momento do preço: avisa o
+// grupo da equipe, manda uma ponte curta ao paciente e pausa a IA. Fire-and-forget.
+async function handlePriceHandoff(
+  db: DB,
+  agent: Record<string, unknown>,
+  conv: { id: string; contact_name?: string | null },
+  remoteJid: string,
+  triggerMsgId: string,
+) {
+  const instance = String(agent.instance_name);
+  // 1) Avisa o grupo da equipe (secretária assume para converter).
+  const groupJid = String(agent.agenda_notify_group_jid ?? "").trim();
+  if (groupJid) {
+    try {
+      const notice = buildHandoffNotification(
+        agent,
+        { contact_name: conv?.contact_name ?? null, remote_jid: remoteJid },
+        null,
+        "perguntou sobre o valor da consulta",
+      );
+      await sendToGroup(instance, groupJid, notice);
+    } catch (e) {
+      console.error("price handoff group notify error", e);
+    }
+  }
+  // 2) Ponte curta ao paciente — mantém aquecido até a secretária entrar.
+  try {
+    await sendAiReply(
+      db,
+      instance,
+      remoteJid,
+      conv.id,
+      "Ótima pergunta! 😊 Deixa eu te passar pra nossa especialista, que já vai te explicar os valores e as melhores condições de pagamento, tá?",
+      {},
+    );
+  } catch (e) {
+    console.error("price handoff bridge error", e);
+  }
+  // 3) Pausa a IA — a secretária assume a partir daqui.
+  await db
+    .from("whatsapp_conversations")
+    .update({
+      human_takeover: true,
+      human_takeover_at: new Date().toISOString(),
+      ai_paused: true,
+      last_answered_inbound_message_id: triggerMsgId,
+    })
+    .eq("id", conv.id);
+}
+
 async function extractMessage(
   db: DB,
   instance: string,
@@ -484,6 +544,17 @@ async function handleMessage(db: DB, instance: string, data: Record<string, unkn
   }
 
   if (agent.ai_enabled && temPrompt && !conv.ai_paused && !conv.human_takeover) {
+    // Dr. Rafael: no momento do preço, passa o atendimento pra secretária (ela
+    // converte) em vez de a IA responder. Só dispara quando a IA responderia.
+    if (agent.price_handoff_enabled === true && isPriceQuestion(extracted.content)) {
+      // deno-lint-ignore no-explicit-any
+      (globalThis as any).EdgeRuntime?.waitUntil(
+        handlePriceHandoff(db, agent, conv, remoteJid, inserted.id).catch((e: unknown) =>
+          console.error("price handoff error", e),
+        ),
+      );
+      return;
+    }
     // Responde 200 já; pipeline roda em background com debounce.
     // deno-lint-ignore no-explicit-any
     (globalThis as any).EdgeRuntime?.waitUntil(

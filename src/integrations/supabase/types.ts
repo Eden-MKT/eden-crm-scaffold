@@ -375,6 +375,7 @@ export interface Database {
           response_delay_seconds: number;
           is_medical: boolean;
           agenda_enabled: boolean;
+          price_handoff_enabled: boolean;
           agenda_notify_group_jid: string | null;
           group_consult_topics: Json;
           agenda_timezone: string;
@@ -416,6 +417,7 @@ export interface Database {
           response_delay_seconds?: number;
           is_medical?: boolean;
           agenda_enabled?: boolean;
+          price_handoff_enabled?: boolean;
           agenda_notify_group_jid?: string | null;
           group_consult_topics?: Json;
           agenda_timezone?: string;
@@ -457,6 +459,7 @@ export interface Database {
           response_delay_seconds?: number;
           is_medical?: boolean;
           agenda_enabled?: boolean;
+          price_handoff_enabled?: boolean;
           agenda_notify_group_jid?: string | null;
           group_consult_topics?: Json;
           agenda_timezone?: string;
